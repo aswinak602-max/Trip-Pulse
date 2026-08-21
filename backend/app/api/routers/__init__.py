@@ -1,0 +1,15 @@
+from .health import router as health_router
+from .auth import router as auth_router
+from .trips import router as trips_router
+from .destinations import router as destinations_router
+from .places import router as places_router
+from .maps import router as maps_router
+from .weather import router as weather_router
+from .cost import router as cost_router
+from .itinerary import router as itinerary_router
+from .expenses import router as expenses_router
+from .reservations import router as reservations_router
+from .members import router as members_router
+from .checklists import router as checklists_router
+from .assistant import router as assistant_router
+from .websocket_location import router as ws_location_router
