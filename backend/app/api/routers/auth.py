@@ -1,4 +1,6 @@
 import secrets
+import hashlib
+import re
 from datetime import datetime, timedelta
 import json
 import urllib.request
@@ -16,13 +18,14 @@ from app.core.database import get_db
 from app.core.response import success_response, error_response
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.config import settings
-from app.models.user import User
+from app.models.user import User, PasswordResetCode
 from app.models.trip import Trip, TripMember, ItineraryItem, Expense, Reservation, ChecklistItem, SavedPlace
 from app.schemas.auth import (
     UserRegister, 
     UserLogin, 
     UserOut, 
     ForgotPasswordRequest, 
+    VerifyResetCodeRequest,
     ResetPasswordRequest,
     UserProfileUpdate,
     UserPreferencesUpdate,
@@ -30,6 +33,12 @@ from app.schemas.auth import (
 )
 from app.api.deps import get_current_user
 from app.services.email_service import email_service
+
+def hash_verification_code(email: str, code: str) -> str:
+    """Computes a cryptographically salted SHA-256 hash of the verification code."""
+    salt = settings.SECRET_KEY[:16]
+    return hashlib.sha256(f"{email.lower().strip()}:{code.strip()}:{salt}".encode("utf-8")).hexdigest()
+
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -151,70 +160,294 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
-    Generates a secure password reset token with expiration.
-    Does NOT reveal whether the user exists to prevent email enumeration attacks.
+    Receives email, applies rate limiting, generates a cryptographically secure 6-digit code,
+    stores its salted SHA-256 hash with 10-minute expiry and attempt limit,
+    and sends the code via email without exposing it in the API response.
     """
     clean_email = req.email.lower().strip()
+    if not clean_email or "@" not in clean_email:
+        return error_response(
+            message="Please provide a valid email address.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Rate limiting: Enforce cooldown between code generation requests for the same email
+    cooldown_seconds = getattr(settings, "PASSWORD_RESET_COOLDOWN_SECONDS", 60)
+    recent_request = db.query(PasswordResetCode).filter(
+        PasswordResetCode.email == clean_email
+    ).order_by(PasswordResetCode.created_at.desc()).first()
+
+    if recent_request and recent_request.created_at:
+        elapsed = (datetime.utcnow() - recent_request.created_at).total_seconds()
+        if elapsed < cooldown_seconds:
+            remaining = int(cooldown_seconds - elapsed)
+            return error_response(
+                message=f"Please wait {remaining} seconds before requesting a new verification code.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+    # Invalidate / cancel previous active reset codes for this email
+    existing_active = db.query(PasswordResetCode).filter(
+        PasswordResetCode.email == clean_email,
+        PasswordResetCode.is_used == False
+    ).all()
+    for item in existing_active:
+        item.is_used = True
+    db.commit()
+
+    # Generate cryptographically secure 6-digit verification code
+    code = f"{secrets.randbelow(1000000):06d}"
+    code_hash = hash_verification_code(clean_email, code)
+    expire_minutes = getattr(settings, "PASSWORD_RESET_CODE_EXPIRE_MINUTES", 10)
+    expires_at = datetime.utcnow() + timedelta(minutes=expire_minutes)
+
+    # Find user if exists (to link user_id and get user name for email greeting)
     user = db.query(User).filter(User.email == clean_email).first()
-    
-    reset_token = None
-    if user:
-        # Generate cryptographically secure token
-        token_str = secrets.token_urlsafe(32)
-        user.reset_token = token_str
-        user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+
+    # Store reset request record with code HASH (never plaintext code)
+    reset_record = PasswordResetCode(
+        user_id=user.id if user else None,
+        email=clean_email,
+        code_hash=code_hash,
+        expires_at=expires_at,
+        attempts=0,
+        is_verified=False,
+        is_used=False
+    )
+    db.add(reset_record)
+    db.commit()
+
+    # Send verification code email via EmailService
+    email_sent = False
+    err_detail = "Unable to send the verification email. Please try again."
+    try:
+        email_sent, err_detail = email_service.send_password_reset_code_email(
+            recipient_email=clean_email,
+            verification_code=code,
+            recipient_name=user.name if user else None
+        )
+    except Exception as e:
+        err_detail = f"Email dispatch failed: {str(e)}"
+        print(f"[TripPulse Auth] Email dispatch exception: {e}")
+
+    if not email_sent:
+        # Invalidate the record so the user isn't blocked by cooldown on retry
+        reset_record.is_used = True
         db.commit()
-        reset_token = token_str
-        # In a production environment with SMTP configured, send an email here.
-        print(f"[TripPulse Auth] Password recovery token generated for {clean_email}: {token_str}")
-    
-    # Generic safe response that prevents email enumeration
+        return error_response(
+            message=err_detail,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    # Generic safe response preventing email enumeration and never exposing the code
     return success_response(
         data={
             "email": clean_email,
-            "demo_token": reset_token  # Provided for seamless local testing without SMTP server
+            "expires_in_minutes": expire_minutes,
+            "cooldown_seconds": cooldown_seconds
         },
-        message="If an account with that email exists, password reset instructions have been sent to your email address."
+        message="If an account exists for this email, a verification code has been sent."
+    )
+
+@router.post("/test-email")
+def test_email_endpoint(req: ForgotPasswordRequest):
+    """
+    Development test endpoint to verify SMTP delivery independently of OTP logic.
+    """
+    clean_email = req.email.lower().strip()
+    success, msg = email_service.send_test_email(clean_email)
+    if not success:
+        return error_response(
+            message=msg,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            data=email_service.get_smtp_status_summary()
+        )
+    return success_response(
+        data=email_service.get_smtp_status_summary(),
+        message=msg
+    )
+
+@router.get("/smtp-status")
+def get_smtp_status_endpoint():
+    """
+    Diagnostic endpoint that returns safe SMTP configuration details and connection health.
+    """
+    connected, msg, summary = email_service.diagnose_smtp_connection()
+    return success_response(
+        data={
+            "connected": connected,
+            "message": msg,
+            **summary
+        },
+        message="SMTP status diagnostic"
+    )
+
+@router.post("/verify-reset-code")
+def verify_reset_code(req: VerifyResetCodeRequest, db: Session = Depends(get_db)):
+    """
+    Verifies the submitted 6-digit code against the stored hash.
+    Checks expiration, enforces maximum 5 attempts, and returns a short-lived reset token.
+    """
+    clean_email = req.email.lower().strip()
+    clean_code = (req.code or "").strip()
+
+    if not clean_code:
+        return error_response(
+            message="Please enter your 6-digit verification code.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Find the most recent active code for this email
+    record = db.query(PasswordResetCode).filter(
+        PasswordResetCode.email == clean_email,
+        PasswordResetCode.is_used == False
+    ).order_by(PasswordResetCode.created_at.desc()).first()
+
+    if not record:
+        return error_response(
+            message="This verification code has expired. Please request a new code.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check expiration (10 minutes)
+    if record.expires_at < datetime.utcnow():
+        record.is_used = True
+        db.commit()
+        return error_response(
+            message="This verification code has expired. Please request a new code.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check attempt limit (5 attempts max)
+    if record.attempts >= 5:
+        record.is_used = True
+        db.commit()
+        return error_response(
+            message="Too many attempts. Please request a new verification code.",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    # Compute hash of submitted code and compare securely
+    submitted_hash = hash_verification_code(clean_email, clean_code)
+    if not secrets.compare_digest(record.code_hash, submitted_hash):
+        record.attempts += 1
+        db.commit()
+        if record.attempts >= 5:
+            record.is_used = True
+            db.commit()
+            return error_response(
+                message="Too many attempts. Please request a new verification code.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        return error_response(
+            message="Incorrect verification code. Please try again.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # If code is correct, issue a short-lived reset token (valid for 15 minutes)
+    reset_token = secrets.token_urlsafe(32)
+    record.is_verified = True
+    record.reset_token = reset_token
+    record.reset_token_expires_at = datetime.utcnow() + timedelta(minutes=15)
+    db.commit()
+
+    return success_response(
+        data={
+            "email": clean_email,
+            "reset_token": reset_token
+        },
+        message="Verification code confirmed successfully."
     )
 
 @router.post("/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    if req.new_password != req.confirm_password:
+    """
+    Securely updates the user's password using the validated reset token.
+    Enforces password security requirements and invalidates tokens immediately after use.
+    """
+    clean_token = req.token.strip() if req.token else ""
+    if not clean_token:
         return error_response(
-            message="New passwords do not match",
+            message="This password reset session has expired. Please start again.",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
-    if len(req.new_password) < 6:
+
+    # Check password match
+    if req.confirm_password is not None and req.new_password != req.confirm_password:
         return error_response(
-            message="Password must be at least 6 characters long",
+            message="Passwords do not match.",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
-    clean_token = req.token.strip()
-    user = db.query(User).filter(User.reset_token == clean_token).first()
+
+    # Password policy: At least 8 chars, contains a letter, contains a number
+    if (len(req.new_password) < 8 or 
+        not re.search(r"[a-zA-Z]", req.new_password) or 
+        not re.search(r"[0-9]", req.new_password)):
+        return error_response(
+            message="Password does not meet the required security requirements.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Lookup reset session by token
+    record = db.query(PasswordResetCode).filter(
+        PasswordResetCode.reset_token == clean_token,
+        PasswordResetCode.is_verified == True,
+        PasswordResetCode.is_used == False
+    ).first()
+
+    # Legacy fallback check on User table
+    legacy_user = None
+    if not record:
+        legacy_user = db.query(User).filter(
+            User.reset_token == clean_token,
+            User.reset_token_expires >= datetime.utcnow()
+        ).first()
+
+    if not record and not legacy_user:
+        return error_response(
+            message="This password reset session has expired. Please start again.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check token expiration
+    if record and record.reset_token_expires_at and record.reset_token_expires_at < datetime.utcnow():
+        record.is_used = True
+        record.reset_token = None
+        db.commit()
+        return error_response(
+            message="This password reset session has expired. Please start again.",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    target_email = record.email if record else legacy_user.email
+    user = db.query(User).filter(User.email == target_email).first()
     if not user:
         return error_response(
-            message="Invalid or expired password reset link. Please request a new one.",
+            message="Something went wrong. Please try again.",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
-    if user.reset_token_expires and user.reset_token_expires < datetime.utcnow():
-        return error_response(
-            message="Password reset link has expired. Please request a new one.",
-            status_code=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Update password and revoke reset token
+
+    # Update password using existing secure hashing
     user.hashed_password = get_password_hash(req.new_password)
     user.reset_token = None
     user.reset_token_expires = None
+
+    # Invalidate reset record and all pending codes for this email (single-use)
+    if record:
+        record.is_used = True
+        record.used_at = datetime.utcnow()
+        record.reset_token = None
+        record.reset_token_expires_at = None
+
+    # Invalidate any lingering codes for this email
+    db.query(PasswordResetCode).filter(PasswordResetCode.email == target_email).update({"is_used": True})
     db.commit()
-    
+
     return success_response(
         data=None,
-        message="Your password has been reset successfully! You can now log in."
+        message="Your password has been updated successfully."
     )
+
 
 @router.put("/profile")
 def update_profile(

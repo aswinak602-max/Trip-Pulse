@@ -16,7 +16,9 @@ import {
   Hotel,
   AlertCircle,
   Bell,
-  AlertTriangle
+  AlertTriangle,
+  DollarSign,
+  Tag
 } from 'lucide-react';
 import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -42,6 +44,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
     custom_title: '',
     activity_type: 'attraction',
     duration_hours: 2.0,
+    estimated_cost: 250,
     notes: ''
   });
 
@@ -109,6 +112,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
           custom_title: '',
           activity_type: 'attraction',
           duration_hours: 2.0,
+          estimated_cost: 250,
           notes: ''
         });
         await fetchItinerary();
@@ -145,7 +149,6 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
     .filter(item => item.day_number === activeDay)
     .sort((a, b) => a.sort_order - b.sort_order);
 
-  // Calculate schedule stats for the active day
   const totalPlannedHours = currentDayItems.reduce((acc, it) => acc + (it.duration_hours || 2.0), 0);
   const totalTransitMins = currentDayItems.reduce((acc, it) => acc + (it.travel_time_mins || 0), 0);
   const isScheduleTight = totalPlannedHours + (totalTransitMins / 60) > 8.0 || currentDayItems.length >= 4;
@@ -166,15 +169,15 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
 
   const getActivityIcon = (type) => {
     switch (type) {
-      case 'restaurant': return <Utensils size={16} color="#f97316" />;
-      case 'hotel': return <Hotel size={16} color="#8b5cf6" />;
-      case 'transport': return <Car size={16} color="#3b82f6" />;
-      default: return <Compass size={16} color="#10b981" />;
+      case 'restaurant': return <Utensils size={18} color="#FF6B6B" />;
+      case 'hotel': return <Hotel size={18} color="#F4C95D" />;
+      case 'transport': return <Car size={18} color="#0FA3B1" />;
+      default: return <Compass size={18} color="#0FA3B1" />;
     }
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px' }}>
       
       {/* Header Banner */}
       <div className="glass-card" style={{
@@ -182,21 +185,23 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '16px',
-        background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.4) 0%, rgba(17, 24, 39, 0.8) 100%)',
-        padding: '24px 32px'
+        gap: '20px',
+        background: 'var(--hero-gradient)',
+        border: '1px solid var(--border)',
+        padding: '28px 36px',
+        boxShadow: 'var(--shadow-md)'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span className="badge badge-info">
-              <Calendar size={12} /> Day-Wise Trip Schedule
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <span className="badge badge-teal">
+              <Calendar size={12} /> Timeline Schedule
             </span>
-            <span className="badge badge-success">
+            <span className="badge badge-coral">
               {trip?.destination || 'Destination'} ({daysCount} Days)
             </span>
           </div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', margin: 0 }}>
-            Interactive Itinerary & Route Flow
+          <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.02em' }}>
+            Day-by-Day Travel Itinerary
           </h1>
         </div>
 
@@ -204,8 +209,8 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
           <button 
             className="btn btn-secondary btn-sm"
             onClick={triggerScheduleReminder}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.4)' }}
-            title="Check smart travel reminders and schedule status"
+            style={{ color: '#B45309', borderColor: 'rgba(244, 201, 93, 0.4)' }}
+            title="Check smart travel reminders"
           >
             <Bell size={15} /> Travel Reminder
           </button>
@@ -217,20 +222,20 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
             title="Rearrange stops geographically using TSP nearest-neighbor algorithm to eliminate zigzag driving"
           >
             <Shuffle size={15} color="var(--primary)" /> 
-            {optimizing ? 'Optimizing Route...' : `Smart Optimize Day ${activeDay}`}
+            {optimizing ? 'Optimizing Route...' : `Smart Route Day ${activeDay}`}
           </button>
 
           <button 
             className="btn btn-primary btn-sm"
             onClick={() => setShowAddModal(true)}
           >
-            <Plus size={16} /> Add Stop to Day {activeDay}
+            <Plus size={16} /> Add Stop
           </button>
         </div>
       </div>
 
       {/* Day Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+      <div style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border)', paddingBottom: '14px', overflowX: 'auto' }}>
         {Array.from({ length: daysCount }, (_, i) => i + 1).map((dayNum) => {
           const isActive = activeDay === dayNum;
           const dayStopsCount = itineraryItems.filter(it => it.day_number === dayNum).length;
@@ -242,23 +247,25 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '10px 20px',
-                borderRadius: 'var(--radius-lg)',
+                padding: '10px 22px',
+                borderRadius: 'var(--radius-full)',
                 border: 'none',
-                background: isActive ? 'var(--accent-gradient)' : 'rgba(255, 255, 255, 0.04)',
-                color: isActive ? '#fff' : 'var(--text-muted)',
-                fontWeight: isActive ? 700 : 500,
+                background: isActive ? 'var(--cta-gradient)' : 'var(--bg-surface)',
+                color: isActive ? '#FFFFFF' : 'var(--text-muted)',
+                fontWeight: isActive ? 800 : 600,
                 cursor: 'pointer',
-                transition: 'var(--transition-fast)'
+                transition: 'var(--transition-fast)',
+                boxShadow: isActive ? 'var(--shadow-glow)' : 'none'
               }}
             >
-              <span>Day {dayNum}</span>
+              <span>DAY {dayNum}</span>
               <span style={{
-                fontSize: '0.72rem',
-                padding: '2px 6px',
+                fontSize: '0.74rem',
+                padding: '2px 8px',
                 borderRadius: 'var(--radius-full)',
-                background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)',
-                color: isActive ? '#fff' : 'var(--text-dim)'
+                background: isActive ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
+                color: isActive ? '#FFFFFF' : 'var(--text-dim)',
+                fontWeight: 700
               }}>
                 {dayStopsCount} stops
               </span>
@@ -267,7 +274,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
         })}
       </div>
 
-      {/* Smart Equal Time Distribution Schedule Status Bar */}
+      {/* Schedule Balance Status Bar */}
       {currentDayItems.length > 0 && (
         <div style={{
           display: 'flex',
@@ -277,23 +284,23 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
           gap: '12px',
           padding: '14px 20px',
           borderRadius: 'var(--radius-md)',
-          background: isScheduleTight ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.08)',
-          border: `1px solid ${isScheduleTight ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.25)'}`
+          background: isScheduleTight ? 'rgba(245, 158, 11, 0.1)' : 'var(--success-bg)',
+          border: `1px solid ${isScheduleTight ? 'rgba(245, 158, 11, 0.3)' : 'var(--success-border)'}`
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             {isScheduleTight ? (
-              <AlertTriangle size={18} color="#fbbf24" style={{ flexShrink: 0 }} />
+              <AlertTriangle size={18} color="#F59E0B" style={{ flexShrink: 0 }} />
             ) : (
-              <CheckCircle2 size={18} color="#34d399" style={{ flexShrink: 0 }} />
+              <CheckCircle2 size={18} color="var(--success)" style={{ flexShrink: 0 }} />
             )}
             <div>
-              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: isScheduleTight ? '#fef3c7' : '#d1fae5' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: isScheduleTight ? '#B45309' : 'var(--success)' }}>
                 {isScheduleTight 
-                  ? 'Your current schedule is tight. You may need to reduce the time spent at some locations or remove one attraction.'
-                  : `Optimal Equal Time Distribution: ${currentDayItems.length} stops balanced across Day ${activeDay}.`}
+                  ? 'High schedule density: Consider shortening stay at locations to allow buffer transit time.'
+                  : `Day ${activeDay} schedule is balanced across sightseeing and travel window.`}
               </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Total Sightseeing: <strong style={{ color: '#fff' }}>{totalPlannedHours.toFixed(1)} hrs</strong> • Transit Time: <strong style={{ color: '#fff' }}>{totalTransitMins} mins</strong> • Available Window: <strong>9.0 hrs</strong>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Planned Sightseeing: <strong>{totalPlannedHours.toFixed(1)} hrs</strong> • Transit Time: <strong>{totalTransitMins} mins</strong>
               </div>
             </div>
           </div>
@@ -304,50 +311,52 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
             onClick={triggerScheduleReminder}
             style={{ fontSize: '0.78rem', padding: '6px 12px' }}
           >
-            Check Schedule Reminder
+            Check Schedule Status
           </button>
         </div>
       )}
 
-      {/* Day Itinerary Timeline */}
+      {/* Day Itinerary Timeline View */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px 0' }}>
           <LoadingSpinner text={`Loading Day ${activeDay} schedule...`} />
         </div>
       ) : currentDayItems.length === 0 ? (
         <div className="glass-card" style={{ textAlign: 'center', padding: '50px 20px' }}>
-          <Calendar size={40} style={{ color: 'var(--text-dim)', margin: '0 auto 12px auto' }} />
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '6px' }}>No Activities Scheduled for Day {activeDay}</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '18px' }}>
-            Add tourist places from Explore tab or create custom restaurant/hotel stops.
+          <Calendar size={44} style={{ color: 'var(--text-dim)', margin: '0 auto 12px auto' }} />
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '6px', color: 'var(--text-main)' }}>No Activities Scheduled for Day {activeDay}</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+            Add tourist places from Explore or create custom activities like hotel check-in, dining, or beach visits.
           </p>
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <Plus size={16} /> Add First Activity
+            <Plus size={16} /> Add First Stop
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="timeline-track">
           {currentDayItems.map((item, index) => {
             const hasPrevTransit = index > 0 && (item.distance_from_prev_km > 0 || item.travel_time_mins > 0);
             return (
-              <React.Fragment key={item.id}>
+              <div key={item.id} className="timeline-item">
+                <div className="timeline-node" />
+
                 {/* Distance & Travel Time Transit Connector */}
                 {hasPrevTransit && (
                   <div style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    marginLeft: '28px',
-                    padding: '6px 14px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1px dashed rgba(59, 130, 246, 0.3)',
-                    color: '#93c5fd',
-                    fontSize: '0.8rem',
-                    width: 'fit-content'
+                    gap: '8px',
+                    marginBottom: '10px',
+                    padding: '4px 12px',
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--primary-light)',
+                    border: '1px dashed var(--primary)',
+                    color: 'var(--primary)',
+                    fontSize: '0.78rem',
+                    fontWeight: 700
                   }}>
-                    <Navigation size={13} />
-                    <span>Transit: <strong>{item.distance_from_prev_km} km</strong> ({item.travel_time_mins} mins driving)</span>
+                    <Navigation size={12} />
+                    <span>Transit: <strong>{item.distance_from_prev_km} km</strong> • ~{item.travel_time_mins} mins</span>
                   </div>
                 )}
 
@@ -356,44 +365,47 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '18px 24px',
-                  gap: '16px',
-                  borderLeft: `4px solid ${index === 0 ? '#10b981' : (index === currentDayItems.length - 1 ? '#8b5cf6' : '#3b82f6')}`
+                  padding: '20px 24px',
+                  gap: '18px',
+                  borderLeft: `4px solid ${index === 0 ? 'var(--secondary-teal)' : (index === currentDayItems.length - 1 ? 'var(--accent-coral)' : 'var(--highlight-gold)')}`
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flex: 1 }}>
                     {/* Time Slot Pill */}
                     <div style={{
-                      padding: '8px 14px',
+                      padding: '10px 14px',
                       borderRadius: 'var(--radius-md)',
-                      background: 'rgba(255, 255, 255, 0.05)',
+                      background: 'var(--bg-surface)',
                       border: '1px solid var(--border)',
                       textAlign: 'center',
-                      minWidth: '95px'
+                      minWidth: '100px'
                     }}>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Stop #{index + 1}</div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#fff' }}>{item.time_slot}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 800 }}>Stop #{index + 1}</div>
+                      <div style={{ fontSize: '0.96rem', fontWeight: 900, color: 'var(--primary)' }}>{item.time_slot}</div>
                     </div>
 
                     {/* Place Info */}
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                         {getActivityIcon(item.activity_type)}
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', margin: 0 }}>
+                        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
                           {item.custom_title || item.place?.name}
                         </h3>
                         {item.place?.category && (
-                          <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>
+                          <span className="badge badge-teal" style={{ fontSize: '0.72rem' }}>
                             {item.place.category}
                           </span>
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Clock size={13} /> {item.duration_hours || 2} hours duration
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '18px', color: 'var(--text-muted)', fontSize: '0.84rem', flexWrap: 'wrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Clock size={14} /> {item.duration_hours || 2} hrs duration
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-main)', fontWeight: 600 }}>
+                          <DollarSign size={14} color="var(--primary)" /> Est. ₹{item.estimated_cost || 200}
                         </span>
                         {item.notes && (
-                          <span style={{ color: '#cbd5e1' }}>
+                          <span style={{ color: 'var(--text-dim)' }}>
                             • {item.notes}
                           </span>
                         )}
@@ -408,7 +420,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                       onClick={() => handleDirectionsForStop(item)}
                       title={`View directions to ${item.custom_title || item.place?.name} on map`}
                     >
-                      <MapPin size={14} /> Directions
+                      <MapPin size={14} /> Map
                     </button>
                     <button 
                       className="btn btn-danger btn-sm"
@@ -419,7 +431,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                     </button>
                   </div>
                 </div>
-              </React.Fragment>
+              </div>
             );
           })}
         </div>
@@ -430,7 +442,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(11, 19, 43, 0.7)',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -438,8 +450,8 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
           zIndex: 1000,
           padding: '20px'
         }}>
-          <div className="glass-card" style={{ width: '480px', maxWidth: '100%', padding: '28px' }}>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '18px' }}>
+          <div className="glass-card" style={{ width: '480px', maxWidth: '100%', padding: '30px' }}>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '20px', color: 'var(--text-main)' }}>
               Add Activity to Day {activeDay}
             </h3>
 
@@ -449,7 +461,7 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                 <input 
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Doddabetta Peak Sightseeing"
+                  placeholder="e.g. Hotel Check-in, Botanical Garden, Beach Sunset"
                   value={newActivity.custom_title}
                   onChange={(e) => setNewActivity({ ...newActivity, custom_title: e.target.value })}
                   required
@@ -480,23 +492,37 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                     <option value="restaurant">Restaurant / Dining</option>
                     <option value="hotel">Hotel / Accommodation</option>
                     <option value="transport">Transit / Travel</option>
-                    <option value="leisure">Leisure / Free Time</option>
+                    <option value="leisure">Leisure / Beach</option>
                   </select>
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Duration (Hours)</label>
-                <input 
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  max="12"
-                  className="form-input"
-                  value={newActivity.duration_hours}
-                  onChange={(e) => setNewActivity({ ...newActivity, duration_hours: parseFloat(e.target.value) || 2 })}
-                  required
-                />
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Duration (Hours)</label>
+                  <input 
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max="12"
+                    className="form-input"
+                    value={newActivity.duration_hours}
+                    onChange={(e) => setNewActivity({ ...newActivity, duration_hours: parseFloat(e.target.value) || 2 })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Estimated Cost (₹ INR)</label>
+                  <input 
+                    type="number"
+                    step="50"
+                    min="0"
+                    className="form-input"
+                    value={newActivity.estimated_cost}
+                    onChange={(e) => setNewActivity({ ...newActivity, estimated_cost: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
               </div>
 
               <div className="form-group">
@@ -504,13 +530,13 @@ export const ItineraryPage = ({ trip, setActivePage, onSelectDirections }) => {
                 <input 
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Carry camera and jackets"
+                  placeholder="e.g. Carry cameras, warm jackets"
                   value={newActivity.notes}
                   onChange={(e) => setNewActivity({ ...newActivity, notes: e.target.value })}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
                 <button 
                   type="button" 
                   className="btn btn-secondary"

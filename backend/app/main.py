@@ -85,9 +85,28 @@ def log_oauth_startup_banner():
     print(f"  * GOOGLE_CLIENT_ID Status         : {cid_status}")
     print(f"  * GOOGLE_CLIENT_SECRET Status     : {secret_status}")
     print(f"  * Google OAuth Ready              : {'YES (Ready for Live Login)' if settings.is_google_auth_ready() else 'NO (Set real Google Web Client ID in .env)'}")
+def log_smtp_startup_banner():
+    host = settings.clean_smtp_host
+    port = settings.clean_smtp_port
+    user = settings.clean_smtp_username
+    has_user = bool(user and "@" in user)
+    has_pwd = bool(settings.clean_smtp_password and not settings.is_smtp_password_placeholder())
+    from_addr = settings.clean_smtp_from
+    is_ready = settings.is_smtp_configured()
+
+    print("=" * 70)
+    print(" TripPulse Backend - SMTP Email Diagnostics")
+    print("=" * 70)
+    print(f"  * SMTP_HOST                       : {host}")
+    print(f"  * SMTP_PORT                       : {port}")
+    print(f"  * SMTP_USERNAME                   : {'configured' if has_user else 'NOT CONFIGURED'}")
+    print(f"  * SMTP_PASSWORD                   : {'configured (Hidden)' if has_pwd else 'NOT CONFIGURED (Required: Gmail App Password)'}")
+    print(f"  * SMTP_FROM                       : {from_addr}")
+    print(f"  * SMTP Service Ready              : {'YES (Ready to send OTP emails)' if is_ready else 'NO (Set SMTP_USERNAME & SMTP_PASSWORD in .env)'}")
     print("=" * 70)
 
 log_oauth_startup_banner()
+log_smtp_startup_banner()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

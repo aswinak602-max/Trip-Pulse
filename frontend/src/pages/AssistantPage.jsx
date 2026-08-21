@@ -34,40 +34,40 @@ export const AssistantPage = ({ trip, setActivePage }) => {
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
       {/* Context Banner */}
       <div className="glass-card" style={{
-        background: 'linear-gradient(135deg, rgba(88, 28, 135, 0.4) 0%, rgba(30, 58, 138, 0.35) 50%, rgba(17, 24, 39, 0.9) 100%)',
-        border: '1px solid rgba(168, 85, 247, 0.3)',
-        padding: '20px 28px',
+        background: 'var(--hero-gradient)',
+        border: '1px solid var(--border)',
+        padding: '24px 32px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '14px'
+        gap: '16px'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-info" style={{ background: 'rgba(236, 72, 153, 0.2)', color: '#f472b6' }}>
-              <Sparkles size={12} /> Context-Aware LLM Travel Intelligence
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <span className="badge badge-coral">
+              <Sparkles size={12} /> Context-Aware LLM Concierge
             </span>
           </div>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff', margin: 0 }}>
-            AI Tourist Assistant
+          <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, letterSpacing: '-0.02em' }}>
+            AI Travel Assistant
           </h1>
         </div>
 
         {/* Trip Context Badges */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <span className="badge badge-info" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-            <MapPin size={13} /> {trip?.current_location || 'Chennai'} → {destination}
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <span className="badge badge-teal" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+            <MapPin size={14} /> {trip?.current_location || 'Chennai'} → {destination}
           </span>
-          <span className="badge badge-success" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-            <DollarSign size={13} /> Budget: ₹{(trip?.budget || 25000).toLocaleString()}
+          <span className="badge badge-gold" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+            <DollarSign size={14} /> Budget: ₹{(trip?.budget || 25000).toLocaleString()}
           </span>
-          <span className="badge badge-warning" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-            <Calendar size={13} /> {trip?.days_count || 3} Days • {trip?.members_count || 4} Members
+          <span className="badge badge-navy" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+            <Calendar size={14} /> {trip?.days_count || 3} Days • {trip?.members_count || 4} Travelers
           </span>
         </div>
       </div>
@@ -77,6 +77,7 @@ export const AssistantPage = ({ trip, setActivePage }) => {
         tripId={tripId} 
         destination={destination}
         onActionExecute={handleActionExecute}
+        onPlanTrip={() => setActivePage('create-trip')}
       />
 
     </div>

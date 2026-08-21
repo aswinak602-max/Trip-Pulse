@@ -53,6 +53,30 @@ def ensure_schema_compatibility():
         add_column_if_missing("users", "reset_token_expires", "DATETIME")
         add_column_if_missing("users", "google_id", "VARCHAR(100)")
 
+        # Create password_reset_codes table if missing
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS password_reset_codes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    email VARCHAR(150) NOT NULL,
+                    code_hash VARCHAR(255) NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    attempts INTEGER DEFAULT 0 NOT NULL,
+                    is_verified BOOLEAN DEFAULT 0 NOT NULL,
+                    is_used BOOLEAN DEFAULT 0 NOT NULL,
+                    reset_token VARCHAR(255),
+                    reset_token_expires_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    used_at DATETIME
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_password_reset_codes_email ON password_reset_codes (email)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_password_reset_codes_reset_token ON password_reset_codes (reset_token)"))
+            conn.commit()
+        except Exception:
+            pass
+
 def get_db():
     db = SessionLocal()
     try:

@@ -12,7 +12,8 @@ import {
   Users,
   CheckSquare,
   Bot,
-  Settings
+  Settings,
+  Sparkles
 } from 'lucide-react';
 
 export const Sidebar = ({ 
@@ -27,7 +28,7 @@ export const Sidebar = ({
       items: [
         { id: 'dashboard', label: 'Trip Overview', icon: LayoutDashboard },
         { id: 'trip-dashboard', label: 'Active Trip Hub', icon: Compass },
-        { id: 'create-trip', label: 'Create New Trip', icon: PlusCircle },
+        { id: 'create-trip', label: 'Create New Trip', icon: PlusCircle, badge: 'AI', badgeColor: 'teal' },
         { id: 'itinerary', label: 'Itinerary Plan', icon: Calendar },
         { id: 'map', label: 'Map & Routes', icon: Map },
       ]
@@ -41,29 +42,29 @@ export const Sidebar = ({
       ]
     },
     {
-      title: 'MONEY',
+      title: 'FINANCE & ML',
       items: [
-        { id: 'cost-prediction', label: 'Budget & ML Cost', icon: DollarSign, badge: 'ML' },
+        { id: 'cost-prediction', label: 'ML Cost Predictor', icon: DollarSign, badge: 'ML', badgeColor: 'gold' },
         { id: 'expenses', label: 'Expenses & Split', icon: Receipt },
       ]
     },
     {
-      title: 'GROUP & PREP',
+      title: 'COLLABORATION',
       items: [
         { id: 'members', label: 'Group Members', icon: Users },
         { id: 'checklist', label: 'Trip Checklists', icon: CheckSquare },
       ]
     },
     {
-      title: 'ASSIST',
+      title: 'AI CONCIERGE',
       items: [
-        { id: 'assistant', label: 'AI Tourist Assistant', icon: Bot, badge: 'AI' },
+        { id: 'assistant', label: 'AI Travel Assistant', icon: Bot, badge: 'NEW', badgeColor: 'coral' },
       ]
     },
     {
       title: 'SETTINGS',
       items: [
-        { id: 'settings', label: 'Settings & Preferences', icon: Settings },
+        { id: 'settings', label: 'Preferences & Keys', icon: Settings },
       ]
     }
   ];
@@ -81,14 +82,14 @@ export const Sidebar = ({
       )}
 
       <aside style={{
-        width: '240px',
-        minWidth: '240px',
+        width: '248px',
+        minWidth: '248px',
         background: 'var(--bg-sidebar)',
         borderRight: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
-        padding: '16px 10px',
-        gap: '14px',
+        padding: '18px 12px',
+        gap: '16px',
         overflowY: 'auto',
         userSelect: 'none',
         zIndex: 45,
@@ -100,7 +101,7 @@ export const Sidebar = ({
               padding: '4px 12px',
               color: 'var(--text-dim)',
               fontSize: '0.68rem',
-              fontWeight: 700,
+              fontWeight: 800,
               letterSpacing: '0.08em',
               textTransform: 'uppercase'
             }}>
@@ -119,12 +120,12 @@ export const Sidebar = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     width: '100%',
-                    padding: '8px 12px',
+                    padding: '9px 12px',
                     borderRadius: 'var(--radius-md)',
                     border: 'none',
-                    background: isActive ? 'rgba(59, 130, 246, 0.14)' : 'transparent',
-                    color: isActive ? '#93c5fd' : 'var(--text-muted)',
-                    fontSize: '0.84rem',
+                    background: isActive ? 'var(--primary-light)' : 'transparent',
+                    color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                    fontSize: '0.86rem',
                     fontWeight: isActive ? 700 : 500,
                     cursor: 'pointer',
                     transition: 'var(--transition-fast)',
@@ -133,7 +134,7 @@ export const Sidebar = ({
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                      e.currentTarget.style.background = 'var(--bg-subtle)';
                       e.currentTarget.style.color = 'var(--text-main)';
                     }
                   }}
@@ -145,20 +146,19 @@ export const Sidebar = ({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Icon size={16} style={{ color: isActive ? '#3b82f6' : 'var(--text-dim)' }} />
+                    <Icon size={17} style={{ color: isActive ? 'var(--primary)' : 'var(--text-dim)' }} />
                     <span>{item.label}</span>
                   </div>
 
                   {item.badge && (
-                    <span style={{
-                      fontSize: '0.62rem',
-                      fontWeight: 700,
-                      padding: '1px 5px',
-                      borderRadius: '4px',
-                      background: item.badge === 'AI' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(59, 130, 246, 0.18)',
-                      color: item.badge === 'AI' ? '#c084fc' : '#93c5fd',
-                      border: `1px solid ${item.badge === 'AI' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`
-                    }}>
+                    <span 
+                      className={`badge ${
+                        item.badgeColor === 'teal' ? 'badge-teal' :
+                        item.badgeColor === 'coral' ? 'badge-coral' :
+                        item.badgeColor === 'gold' ? 'badge-gold' : 'badge-navy'
+                      }`}
+                      style={{ fontSize: '0.62rem', padding: '1px 6px' }}
+                    >
                       {item.badge}
                     </span>
                   )}

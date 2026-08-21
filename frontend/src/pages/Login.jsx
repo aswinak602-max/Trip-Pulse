@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, LogIn, ArrowRight, AlertCircle, Info, KeyRound, HelpCircle, ExternalLink, X } from 'lucide-react';
+import { 
+  Mail, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  LogIn, 
+  ArrowRight, 
+  AlertCircle, 
+  Sparkles,
+  Compass,
+  CheckCircle2,
+  HelpCircle, 
+  ExternalLink, 
+  X 
+} from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
@@ -31,22 +45,12 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
     }
   }
 
-  // Forgot Password State
-  const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotSuccessMsg, setForgotSuccessMsg] = useState('');
-  const [forgotErrorMsg, setForgotErrorMsg] = useState('');
-  const [demoToken, setDemoToken] = useState('');
-
   // OAuth Config and Processing
   const [oauthConfig, setOAuthConfig] = useState(null);
   const [oauthLoading, setOAuthLoading] = useState(false);
   const [oauthError, setOAuthError] = useState('');
   const [showOAuthHelpModal, setShowOAuthHelpModal] = useState(false);
-  const [oauthHelpDetails, setOAuthHelpDetails] = useState('');
 
-  // Check OAuth config and URL params for return from Google OAuth
   useEffect(() => {
     let isMounted = true;
 
@@ -61,7 +65,6 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
         console.warn('[TripPulse OAuth] Config lookup notice:', err);
       }
 
-      // Check if redirected back with OAuth code, token, or error
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const errorParam = urlParams.get('error');
@@ -89,45 +92,13 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           if (errorParam === 'access_denied') {
             setOAuthError('Google sign-in was cancelled.');
           } else if (errorParam === 'invalid_client') {
-            setOAuthError('Google OAuth error (invalid_client): The GOOGLE_CLIENT_SECRET in backend/.env is invalid or expired. Please create a new Client Secret in Google Cloud Console and paste it into backend/.env.');
-          } else if (errorParam === 'google_client_secret_missing') {
-            setOAuthError('Google OAuth notice: Using client-side Google authentication.');
-          } else if (errorParam === 'google_client_id_missing' || errorParam === 'google_oauth_not_configured') {
-            setOAuthError('Google OAuth is not configured. Please ensure VITE_GOOGLE_CLIENT_ID in frontend/.env is set.');
-          } else if (errorParam === 'oauth_verification_failed' || errorParam === 'token_exchange_failed') {
-            setOAuthError('Google OAuth verification failed. Please try signing in again.');
-          } else if (errorParam === 'redirect_uri_mismatch') {
-            setOAuthError('Google OAuth error (redirect_uri_mismatch): The Authorized Redirect URI in Google Cloud Console must match http://localhost:8000/api/v1/auth/google/callback.');
-          } else if (errorParam === 'invalid_grant') {
-            setOAuthError('Google OAuth error (invalid_grant): The authorization code expired or has already been used. Please try signing in again.');
-          } else if (errorParam === 'missing_authorization_code') {
-            setOAuthError('Google sign-in error: No authorization code received from Google.');
-          } else if (errorParam === 'unverified_google_email') {
-            setOAuthError('Google account email is not verified. Please verify your email with Google.');
-          } else if (errorParam === 'google_userinfo_failed') {
-            setOAuthError('Failed to fetch user profile information from Google.');
-          } else if (errorParam === 'user_creation_failed') {
-            setOAuthError('Failed to create or link user account in TripPulse database.');
+            setOAuthError('Google OAuth error (invalid_client): The GOOGLE_CLIENT_SECRET in backend/.env is invalid or expired.');
           } else {
             setOAuthError(`Google authentication notice: ${errorParam.replace(/_/g, ' ')}`);
           }
         }
       } else if (code) {
         handleGoogleCodeExchange(code);
-      }
-
-      // Check if redirected with email verification token
-      const verifyToken = urlParams.get('verify_token');
-      if (verifyToken) {
-        api.get(`/auth/verify-email?token=${encodeURIComponent(verifyToken)}`)
-          .then((res) => {
-            if (res && res.success) {
-              toast.success('Your email has been verified successfully! You can now sign in.');
-            }
-          })
-          .catch((err) => {
-            console.warn('Verification notice:', err);
-          });
       }
     };
 
@@ -167,7 +138,6 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
 
     if (!validation.valid) {
       setOAuthError(validation.error);
-      setOAuthHelpDetails(validation.error);
       setShowOAuthHelpModal(true);
       return;
     }
@@ -183,12 +153,8 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
         toast.success(`Welcome back, ${data.user.name}!`);
         setActivePage('trip-dashboard');
       },
-      onError: (errMsg, valDetails) => {
+      onError: (errMsg) => {
         setOAuthError(errMsg);
-        if (valDetails && !valDetails.valid) {
-          setOAuthHelpDetails(errMsg);
-          setShowOAuthHelpModal(true);
-        }
       },
       onEnd: () => {
         setOAuthLoading(false);
@@ -222,122 +188,105 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
     }
   };
 
-  const handleForgotPasswordSubmit = async (e) => {
-    e.preventDefault();
-    setForgotErrorMsg('');
-    setForgotSuccessMsg('');
-    setDemoToken('');
-
-    if (!forgotEmail.trim()) {
-      setForgotErrorMsg('Please enter your email address.');
-      return;
-    }
-
-    try {
-      setForgotLoading(true);
-      const res = await api.post('/auth/forgot-password', { email: forgotEmail.trim() });
-      if (res.success) {
-        setForgotSuccessMsg(res.message || 'Password reset link sent to your email.');
-        if (res.data?.demo_token) {
-          setDemoToken(res.data.demo_token);
-        }
-      } else {
-        setForgotErrorMsg(res.message || 'Unable to process password reset.');
-      }
-    } catch (err) {
-      setForgotErrorMsg(err.message || 'Failed to submit forgot password request.');
-    } finally {
-      setForgotLoading(false);
-    }
-  };
-
   return (
     <div style={{
-      maxWidth: '460px',
-      margin: '40px auto',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '24px'
-    }}>
-      <div className="glass-card" style={{ padding: '36px 32px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+      maxWidth: '1080px',
+      margin: '30px auto',
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      borderRadius: 'var(--radius-xl)',
+      overflow: 'hidden',
+      border: '1px solid var(--border)',
+      boxShadow: 'var(--shadow-lg)',
+      minHeight: '620px',
+      background: 'var(--bg-card)'
+    }} className="auth-split-wrapper">
+      
+      {/* Left Column: Inspirational Travel Visual + Quote */}
+      <div style={{
+        position: 'relative',
+        background: `linear-gradient(135deg, rgba(11, 19, 43, 0.92) 0%, rgba(15, 163, 177, 0.75) 100%), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1000&q=80') center/cover`,
+        padding: '48px 40px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        color: '#FFFFFF'
+      }}>
+        {/* Top Brand Tag */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '12px',
-            background: 'var(--accent-gradient)',
-            display: 'inline-flex',
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.2)',
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '12px',
-            boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4)'
+            backdropFilter: 'blur(8px)',
+            color: '#FFFFFF'
           }}>
-            <LogIn size={24} color="#fff" />
+            <Compass size={22} />
           </div>
-          <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Welcome Back</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Sign in to access your intelligent trip plans
-          </p>
+          <span style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '-0.02em' }}>TripPulse</span>
+        </div>
 
-          {/* Subtle Connection Status Badge */}
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginTop: '10px',
-            padding: '3px 10px',
-            borderRadius: 'var(--radius-full)',
-            background: apiStatus === 'online'
-              ? 'rgba(16, 185, 129, 0.08)'
-              : apiStatus === 'checking'
-                ? 'rgba(148, 163, 184, 0.08)'
-                : 'rgba(239, 68, 68, 0.08)',
-            border: `1px solid ${
-              apiStatus === 'online'
-                ? 'rgba(16, 185, 129, 0.25)'
-                : apiStatus === 'checking'
-                  ? 'rgba(148, 163, 184, 0.2)'
-                  : 'rgba(239, 68, 68, 0.25)'
-            }`,
-            fontSize: '0.74rem',
-            fontWeight: 600,
-            color: apiStatus === 'online'
-              ? '#34d399'
-              : apiStatus === 'checking'
-                ? '#94a3b8'
-                : '#f87171'
-          }}>
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: apiStatus === 'online'
-                ? '#10b981'
-                : apiStatus === 'checking'
-                  ? '#94a3b8'
-                  : '#ef4444',
-              boxShadow: apiStatus === 'online' ? '0 0 6px rgba(16, 185, 129, 0.6)' : 'none'
-            }} />
-            <span>
-              {apiStatus === 'online' ? 'Online' : apiStatus === 'checking' ? 'Checking connection...' : 'Offline'}
-            </span>
+        {/* Center Quote */}
+        <div>
+          <span className="badge badge-teal" style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#FFFFFF', borderColor: 'rgba(255, 255, 255, 0.3)', marginBottom: '16px' }}>
+            <Sparkles size={11} style={{ marginRight: '4px' }} /> AI JOURNEY ARCHITECT
+          </span>
+          <h2 style={{ fontSize: '2.1rem', fontWeight: 900, lineHeight: 1.2, color: '#FFFFFF', marginBottom: '16px', letterSpacing: '-0.02em' }}>
+            "Travel is the only thing you buy that makes you richer."
+          </h2>
+          <p style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.96rem', lineHeight: 1.6 }}>
+            Access your personalized multi-day itineraries, machine-learning cost estimates, and real-time weather backup plans.
+          </p>
+        </div>
+
+        {/* Bottom Feature Highlights */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.9)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle2 size={16} color="#34D399" />
+            <span>Multi-day intelligent routing without backtrack driving</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle2 size={16} color="#34D399" />
+            <span>Curated sight catalogs with live weather alerts</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Clean Authentication Card */}
+      <div style={{
+        padding: '48px 44px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        background: 'var(--bg-card)'
+      }}>
+        <div style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+            Welcome Back
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: '4px' }}>
+            Sign in to continue planning your intelligent journeys.
+          </p>
         </div>
 
         {error && (
           <div style={{
             padding: '12px 16px',
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#f87171',
+            background: 'var(--danger-bg)',
+            border: '1px solid var(--danger-border)',
+            color: 'var(--danger)',
             fontSize: '0.88rem',
             marginBottom: '20px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '10px'
           }}>
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <AlertCircle size={17} style={{ flexShrink: 0 }} />
             <span>{error}</span>
           </div>
         )}
@@ -346,9 +295,9 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           <div className="form-group">
             <label className="form-label">Email Address</label>
             <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{
+              <Mail size={17} style={{
                 position: 'absolute',
-                left: '12px',
+                left: '14px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'var(--text-dim)'
@@ -356,7 +305,7 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
               <input
                 type="email"
                 className="form-input"
-                style={{ paddingLeft: '38px' }}
+                style={{ paddingLeft: '42px' }}
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -366,21 +315,23 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           </div>
 
           <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <label className="form-label" style={{ margin: 0 }}>Password</label>
               <button
                 type="button"
                 onClick={() => {
-                  setForgotEmail(formData.email);
-                  setShowForgotModal(true);
+                  if (formData.email) {
+                    sessionStorage.setItem('reset_email', formData.email.trim());
+                  }
+                  setActivePage('forgot-password');
                 }}
                 style={{
                   background: 'none',
                   border: 'none',
                   color: 'var(--primary)',
-                  fontSize: '0.82rem',
+                  fontSize: '0.84rem',
                   cursor: 'pointer',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   padding: 0
                 }}
               >
@@ -388,9 +339,9 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
               </button>
             </div>
             <div style={{ position: 'relative' }}>
-              <Lock size={18} style={{
+              <Lock size={17} style={{
                 position: 'absolute',
-                left: '12px',
+                left: '14px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'var(--text-dim)'
@@ -398,7 +349,7 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
               <input
                 type={showPassword ? 'text' : 'password'}
                 className="form-input"
-                style={{ paddingLeft: '38px', paddingRight: '38px' }}
+                style={{ paddingLeft: '42px', paddingRight: '42px' }}
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -409,7 +360,7 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
                 onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute',
-                  right: '12px',
+                  right: '14px',
                   top: '50%',
                   transform: 'translateY(-50%)',
                   background: 'none',
@@ -419,15 +370,15 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
                   padding: 0
                 }}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </div>
           </div>
 
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: '12px', padding: '12px' }}
+            className="btn btn-primary btn-lg"
+            style={{ width: '100%', marginTop: '12px' }}
             disabled={loading || oauthLoading}
           >
             {loading ? <LoadingSpinner text="Signing in..." /> : (
@@ -443,12 +394,12 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          margin: '24px 0',
+          margin: '22px 0',
           color: 'var(--text-dim)',
           fontSize: '0.82rem'
         }}>
           <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-          <span>or sign in with</span>
+          <span>or continue with</span>
           <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
         </div>
 
@@ -457,52 +408,18 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           type="button"
           onClick={handleGoogleSignIn}
           disabled={oauthLoading || loading}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px',
-            width: '100%',
-            padding: '11px 16px',
-            borderRadius: 'var(--radius-md)',
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: '1px solid var(--border)',
-            color: '#fff',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'var(--transition-fast)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-            e.currentTarget.style.borderColor = 'var(--border)';
-          }}
+          className="btn btn-secondary btn-md"
+          style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '10px' }}
         >
           {oauthLoading ? (
             <LoadingSpinner text="Connecting to Google..." />
           ) : (
             <>
               <svg width="18" height="18" viewBox="0 0 24 24">
-                <path
-                  fill="#EA4335"
-                  d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"
-                />
-                <path
-                  fill="#4285F4"
-                  d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
-                />
+                <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
+                <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
+                <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z" />
+                <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z" />
               </svg>
               <span>Continue with Google</span>
             </>
@@ -512,41 +429,18 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
         {oauthError && (
           <div style={{
             marginTop: '14px',
-            padding: '12px 14px',
+            padding: '10px 14px',
             borderRadius: 'var(--radius-md)',
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#f87171',
-            fontSize: '0.84rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
+            background: 'var(--danger-bg)',
+            border: '1px solid var(--danger-border)',
+            color: 'var(--danger)',
+            fontSize: '0.84rem'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span style={{ flex: 1, lineHeight: 1.4 }}>{oauthError}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowOAuthHelpModal(true)}
-              style={{
-                alignSelf: 'flex-start',
-                background: 'none',
-                border: 'none',
-                color: '#93c5fd',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                padding: 0,
-                textDecoration: 'underline'
-              }}
-            >
-              How do I configure Google OAuth credentials?
-            </button>
+            {oauthError}
           </div>
         )}
 
-        <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
           Don't have an account?{' '}
           <button
             type="button"
@@ -555,7 +449,7 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
               background: 'none',
               border: 'none',
               color: 'var(--primary)',
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: 'pointer',
               padding: 0
             }}
@@ -573,7 +467,7 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           left: 0,
           width: '100vw',
           height: '100vh',
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(11, 19, 43, 0.75)',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -581,23 +475,9 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           zIndex: 100,
           padding: '20px'
         }}>
-          <div className="glass-card" style={{ maxWidth: '520px', width: '100%', padding: '28px' }}>
+          <div className="glass-card" style={{ maxWidth: '520px', width: '100%', padding: '30px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
-                  background: 'rgba(99, 102, 241, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--primary)'
-                }}>
-                  <HelpCircle size={20} />
-                </div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>Google OAuth Setup Guide</h3>
-              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Google OAuth Setup Guide</h3>
               <button
                 type="button"
                 onClick={() => setShowOAuthHelpModal(false)}
@@ -607,42 +487,22 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
               </button>
             </div>
 
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: 1.5, marginBottom: '16px' }}>
-              To enable live Google Sign-In, configure a Google OAuth 2.0 Web Client in Google Cloud Console:
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5, marginBottom: '16px' }}>
+              Configure a Google OAuth 2.0 Web Client in Google Cloud Console:
             </p>
 
             <ol style={{
               margin: '0 0 20px 20px',
               padding: 0,
-              fontSize: '0.84rem',
+              fontSize: '0.86rem',
               color: 'var(--text-main)',
               lineHeight: 1.6
             }}>
               <li>Visit <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>Google Cloud Console Credentials <ExternalLink size={12} style={{ display: 'inline' }} /></a>.</li>
               <li>Create credentials → <strong>OAuth client ID</strong> → Application type: <strong>Web application</strong>.</li>
-              <li>Add Authorized JavaScript origins:
-                <div style={{ background: 'rgba(0, 0, 0, 0.4)', padding: '6px 10px', borderRadius: '6px', margin: '4px 0', fontFamily: 'monospace', fontSize: '0.78rem' }}>
-                  http://localhost:5174<br/>
-                  http://127.0.0.1:5174
-                </div>
-              </li>
-              <li>Add Authorized redirect URIs:
-                <div style={{ background: 'rgba(0, 0, 0, 0.4)', padding: '6px 10px', borderRadius: '6px', margin: '4px 0', fontFamily: 'monospace', fontSize: '0.78rem' }}>
-                  http://localhost:8000/api/v1/auth/google/callback<br/>
-                  http://127.0.0.1:8000/api/v1/auth/google/callback
-                </div>
-              </li>
-              <li>Copy the real Client ID and Secret to your environment files:
-                <div style={{ background: 'rgba(0, 0, 0, 0.4)', padding: '8px 10px', borderRadius: '6px', margin: '4px 0', fontFamily: 'monospace', fontSize: '0.76rem', lineHeight: 1.6 }}>
-                  <strong>frontend/.env:</strong><br/>
-                  VITE_GOOGLE_CLIENT_ID="123456789012-xxx.apps.googleusercontent.com"<br/><br/>
-                  <strong>backend/.env:</strong><br/>
-                  GOOGLE_CLIENT_ID="123456789012-xxx.apps.googleusercontent.com"<br/>
-                  GOOGLE_CLIENT_SECRET="GOCSPX-xxxxxxxxxxxxxxxxxxxx"
-                </div>
-              </li>
+              <li>Add Authorized JavaScript origins: <code>http://localhost:5174</code></li>
+              <li>Add Authorized redirect URIs: <code>http://localhost:8000/api/v1/auth/google/callback</code></li>
             </ol>
-
 
             <button
               type="button"
@@ -650,147 +510,8 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
               style={{ width: '100%' }}
               onClick={() => setShowOAuthHelpModal(false)}
             >
-              Got it!
+              Close
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Forgot Password Modal */}
-      {showForgotModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '20px'
-        }}>
-          <div className="glass-card" style={{ maxWidth: '440px', width: '100%', padding: '32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                background: 'rgba(99, 102, 241, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--primary)'
-              }}>
-                <KeyRound size={20} />
-              </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Reset Password</h3>
-            </div>
-
-            {forgotErrorMsg && (
-              <div style={{
-                padding: '10px 14px',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(239, 68, 68, 0.15)',
-                color: '#f87171',
-                fontSize: '0.85rem',
-                marginBottom: '14px'
-              }}>
-                {forgotErrorMsg}
-              </div>
-            )}
-
-            {forgotSuccessMsg ? (
-              <div>
-                <div style={{
-                  padding: '12px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  border: '1px solid rgba(16, 185, 129, 0.3)',
-                  color: '#34d399',
-                  fontSize: '0.88rem',
-                  marginBottom: '16px'
-                }}>
-                  {forgotSuccessMsg}
-                </div>
-
-                {demoToken && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ width: '100%', marginBottom: '12px' }}
-                    onClick={() => {
-                      setShowForgotModal(false);
-                      if (onOpenResetPassword) {
-                        onOpenResetPassword(demoToken);
-                      } else {
-                        setActivePage('reset-password');
-                      }
-                    }}
-                  >
-                    Proceed to Set New Password →
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ width: '100%' }}
-                  onClick={() => setShowForgotModal(false)}
-                >
-                  Back to Login
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleForgotPasswordSubmit}>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '16px', lineHeight: 1.5 }}>
-                  Enter your verified account email address to receive password recovery instructions.
-                </p>
-
-                <div className="form-group">
-                  <label className="form-label">Account Email</label>
-                  <div style={{ position: 'relative' }}>
-                    <Mail size={18} style={{
-                      position: 'absolute',
-                      left: '12px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: 'var(--text-dim)'
-                    }} />
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      className="form-input"
-                      style={{ paddingLeft: '38px' }}
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ flex: 1 }}
-                    onClick={() => setShowForgotModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ flex: 1 }}
-                    disabled={forgotLoading}
-                  >
-                    {forgotLoading ? <LoadingSpinner text="Sending..." /> : 'Send Link'}
-                  </button>
-                </div>
-              </form>
-            )}
           </div>
         </div>
       )}

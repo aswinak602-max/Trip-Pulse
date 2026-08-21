@@ -1,5 +1,22 @@
-import React from 'react';
-import { Compass, User, CheckCircle2, AlertCircle, Settings, LogOut, Menu, X, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  Compass, 
+  Sparkles, 
+  MapPin, 
+  Calendar, 
+  Heart, 
+  Bot, 
+  Bell, 
+  User, 
+  Settings, 
+  LogOut, 
+  Menu, 
+  X, 
+  Sun, 
+  Moon, 
+  Layers,
+  ChevronDown
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -13,6 +30,7 @@ export const Navbar = ({
 }) => {
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   
   // 3-state API health indicator: 'checking' | 'online' | 'offline'
   let apiStatus = 'checking';
@@ -27,13 +45,21 @@ export const Navbar = ({
   const isApiOnline = apiStatus === 'online';
   const isApiChecking = apiStatus === 'checking';
 
+  const navLinks = [
+    { id: 'search', label: 'Explore', icon: MapPin },
+    { id: 'create-trip', label: 'Plan Trip', icon: Calendar, badge: 'AI' },
+    { id: isAuthenticated ? 'dashboard' : 'welcome', label: 'My Trips', icon: Layers },
+    { id: 'assistant', label: 'AI Assistant', icon: Bot, isNew: true },
+    { id: 'search', label: 'Favorites', icon: Heart, isFavorite: true },
+  ];
+
   return (
     <header style={{
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      height: '62px',
-      padding: '0 24px',
+      height: '66px',
+      padding: '0 28px',
       background: 'var(--bg-header)',
       backdropFilter: 'blur(16px)',
       WebkitBackdropFilter: 'blur(16px)',
@@ -43,195 +69,307 @@ export const Navbar = ({
       zIndex: 50,
       gap: '16px'
     }}>
-      {/* Left: Mobile Toggle + Brand Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {isAuthenticated && (
-          <button
-            onClick={onToggleMobileNav}
-            className="btn btn-ghost"
-            style={{ padding: '6px', display: 'none' }}
-            id="mobile-nav-toggle"
-            aria-label="Toggle navigation menu"
-          >
-            {isMobileNavOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        )}
+      {/* Left: Mobile Toggle + TripPulse Brand Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <button
+          onClick={onToggleMobileNav}
+          className="btn btn-ghost"
+          style={{ padding: '6px', display: 'none' }}
+          id="mobile-nav-toggle"
+          aria-label="Toggle navigation menu"
+        >
+          {isMobileNavOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
 
         <div 
           onClick={() => setActivePage(isAuthenticated ? 'dashboard' : 'welcome')} 
           style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', userSelect: 'none' }}
-          title="TripPulse Travel Platform"
+          title="TripPulse — Smart AI Travel Platform"
         >
           <div style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '9px',
-            background: 'var(--accent-gradient)',
+            width: '38px',
+            height: '38px',
+            borderRadius: '11px',
+            background: 'var(--brand-gradient)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.35)'
+            boxShadow: '0 4px 14px rgba(15, 163, 177, 0.35)',
+            color: '#FFFFFF'
           }}>
-            <Compass size={19} color="#ffffff" />
+            <Compass size={22} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{
-              fontSize: '1.18rem',
+              fontSize: '1.24rem',
               fontWeight: 800,
               color: 'var(--text-main)',
-              letterSpacing: '-0.02em'
+              letterSpacing: '-0.025em'
             }}>
               TripPulse
             </span>
-            <span style={{
-              fontSize: '0.66rem',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              background: 'rgba(59, 130, 246, 0.15)',
-              color: '#3b82f6',
-              fontWeight: 700,
-              border: '1px solid rgba(59, 130, 246, 0.25)'
-            }}>
-              PRO
+            <span className="badge badge-teal" style={{ fontSize: '0.66rem', padding: '2px 7px' }}>
+              <Sparkles size={10} style={{ marginRight: '2px' }} /> AI TRAVEL
             </span>
           </div>
         </div>
       </div>
 
-      {/* Right: API Status Indicator, Theme Switcher & User Profile Controls */}
+      {/* Center: Desktop Navigation Links */}
+      <nav style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: 'var(--bg-surface)',
+        padding: '4px 6px',
+        borderRadius: 'var(--radius-full)',
+        border: '1px solid var(--border)'
+      }} className="desktop-nav">
+        {navLinks.map((link) => {
+          const Icon = link.icon;
+          const isActive = activePage === link.id && (!link.isFavorite || activePage === 'search');
+          return (
+            <button
+              key={link.label}
+              onClick={() => setActivePage(link.id)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-full)',
+                border: 'none',
+                background: isActive ? 'var(--bg-card)' : 'transparent',
+                color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                fontSize: '0.84rem',
+                fontWeight: isActive ? 700 : 600,
+                cursor: 'pointer',
+                transition: 'var(--transition-fast)',
+                boxShadow: isActive ? 'var(--shadow-xs)' : 'none'
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.color = 'var(--text-main)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }
+              }}
+            >
+              <Icon size={15} style={{ color: isActive ? 'var(--primary)' : 'var(--text-dim)' }} />
+              <span>{link.label}</span>
+              {link.badge && (
+                <span className="badge badge-coral" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
+                  {link.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Right: API Status, Theme Switcher, Notifications & Auth */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {/* Subtle API Health Dot */}
+        {/* Subtle API Health Status Indicator */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          padding: '4px 10px',
+          padding: '5px 12px',
           borderRadius: 'var(--radius-full)',
           background: isApiOnline 
-            ? 'rgba(16, 185, 129, 0.08)' 
+            ? 'rgba(16, 185, 129, 0.09)' 
             : isApiChecking 
-              ? 'rgba(148, 163, 184, 0.08)' 
-              : 'rgba(239, 68, 68, 0.08)',
+              ? 'rgba(245, 158, 11, 0.09)' 
+              : 'rgba(239, 68, 68, 0.09)',
           border: `1px solid ${
             isApiOnline 
               ? 'rgba(16, 185, 129, 0.25)' 
               : isApiChecking 
-                ? 'rgba(148, 163, 184, 0.2)' 
+                ? 'rgba(245, 158, 11, 0.25)' 
                 : 'rgba(239, 68, 68, 0.25)'
           }`,
           fontSize: '0.74rem',
-          fontWeight: 600,
+          fontWeight: 700,
           color: isApiOnline 
-            ? '#10b981' 
+            ? 'var(--success)' 
             : isApiChecking 
-              ? 'var(--text-muted)' 
-              : '#ef4444'
+              ? 'var(--warning)' 
+              : 'var(--danger)'
         }} title={
           isApiOnline 
-            ? 'Backend API and database are connected at http://localhost:8000' 
+            ? 'Backend API and SQLite database are active at http://localhost:8000' 
             : isApiChecking 
-              ? 'Checking connection to TripPulse server...' 
-              : 'Backend offline: Unable to connect to http://localhost:8000'
+              ? 'Connecting to TripPulse server...' 
+              : 'Backend offline: Check that http://localhost:8000 is running'
         }>
           <span style={{
-            width: '6px',
-            height: '6px',
+            width: '7px',
+            height: '7px',
             borderRadius: '50%',
             background: isApiOnline 
-              ? '#10b981' 
+              ? 'var(--success)' 
               : isApiChecking 
-                ? '#94a3b8' 
-                : '#ef4444',
-            boxShadow: isApiOnline ? '0 0 6px rgba(16, 185, 129, 0.6)' : 'none'
+                ? 'var(--warning)' 
+                : 'var(--danger)',
+            boxShadow: isApiOnline ? '0 0 8px rgba(16, 185, 129, 0.6)' : 'none'
           }} />
           <span>
-            {isApiOnline ? 'API Online' : isApiChecking ? 'Checking API...' : 'API Offline'}
+            {isApiOnline ? 'API Online' : isApiChecking ? 'Connecting...' : 'API Offline'}
           </span>
         </div>
 
-        {/* Theme Switcher Button */}
+        {/* Theme Toggle Button */}
         <button
           type="button"
           className="btn btn-secondary btn-sm"
           onClick={toggleTheme}
           title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
           style={{
-            padding: '5px 10px',
+            padding: '6px 10px',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
             borderRadius: 'var(--radius-full)',
-            border: '1px solid var(--border)',
             cursor: 'pointer'
           }}
           aria-label="Toggle Theme"
         >
-          {isDark ? <Sun size={15} color="#fbbf24" /> : <Moon size={15} color="#6366f1" />}
-          <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>
-            {isDark ? 'Light' : 'Dark'}
-          </span>
+          {isDark ? <Sun size={15} color="#F4C95D" /> : <Moon size={15} color="#0FA3B1" />}
         </button>
 
         {/* User Auth Section */}
         {isAuthenticated ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Profile Chip */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Notification Bell */}
+            <button 
+              className="btn btn-secondary btn-sm"
+              onClick={() => setActivePage('dashboard')}
+              title="Travel Notifications"
+              style={{ padding: '6px 8px', borderRadius: 'var(--radius-full)', position: 'relative' }}
+            >
+              <Bell size={15} />
+              <span style={{
+                position: 'absolute',
+                top: '4px',
+                right: '4px',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: 'var(--accent-coral)'
+              }} />
+            </button>
+
+            {/* Profile Avatar & Dropdown Trigger */}
             <div 
-              onClick={() => setActivePage('settings')}
+              onClick={() => setProfileDropdownOpen(prev => !prev)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '4px 10px',
+                padding: '4px 10px 4px 5px',
                 borderRadius: 'var(--radius-full)',
-                background: activePage === 'settings' ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-subtle)',
-                border: `1px solid ${activePage === 'settings' ? 'var(--primary)' : 'var(--border)'}`,
+                background: profileDropdownOpen ? 'var(--primary-light)' : 'var(--bg-surface)',
+                border: `1px solid ${profileDropdownOpen ? 'var(--primary)' : 'var(--border)'}`,
                 cursor: 'pointer',
                 transition: 'var(--transition-fast)'
               }}
-              title="View settings & profile"
+              title="User Account Menu"
             >
               <div style={{
-                width: '24px',
-                height: '24px',
+                width: '28px',
+                height: '28px',
                 borderRadius: '50%',
-                background: user?.avatar_url ? `url(${user.avatar_url}) center/cover` : 'var(--primary)',
+                background: user?.avatar_url ? `url(${user.avatar_url}) center/cover` : 'var(--brand-gradient)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                color: '#fff'
+                fontSize: '0.76rem',
+                fontWeight: 800,
+                color: '#FFFFFF'
               }}>
-                {!user?.avatar_url && (user?.name ? user.name.trim()[0].toUpperCase() : 'U')}
+                {!user?.avatar_url && (user?.name ? user.name.trim()[0].toUpperCase() : 'T')}
               </div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user?.name || 'Explorer'}
+              <span style={{
+                fontSize: '0.84rem',
+                fontWeight: 600,
+                color: 'var(--text-main)',
+                maxWidth: '110px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {user?.name || 'Traveler'}
               </span>
+              <ChevronDown size={14} color="var(--text-dim)" />
             </div>
 
-            {/* Quick Action Buttons */}
-            <button 
-              className="btn btn-secondary btn-sm"
-              onClick={() => setActivePage('settings')}
-              title="Settings & Preferences"
-              style={{ padding: '6px 8px' }}
-            >
-              <Settings size={14} />
-            </button>
-
-            <button 
-              className="btn btn-secondary btn-sm" 
-              onClick={() => {
-                logout();
-                setActivePage('welcome');
-              }}
-              title="Log out of TripPulse"
-              style={{ padding: '6px 10px' }}
-            >
-              <LogOut size={13} style={{ marginRight: '3px' }} />
-              <span>Logout</span>
-            </button>
+            {/* Dropdown Menu */}
+            {profileDropdownOpen && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '44px',
+                  right: 0,
+                  width: '210px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-lg)',
+                  padding: '8px',
+                  zIndex: 100,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}
+                onMouseLeave={() => setProfileDropdownOpen(false)}
+              >
+                <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>{user?.name || 'Traveler'}</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email || 'traveler@trippulse.app'}</div>
+                </div>
+                
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setActivePage('settings');
+                    setProfileDropdownOpen(false);
+                  }}
+                  style={{ justifyContent: 'flex-start', width: '100%', padding: '8px 10px' }}
+                >
+                  <Settings size={14} />
+                  <span>Settings & Profile</span>
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setActivePage('dashboard');
+                    setProfileDropdownOpen(false);
+                  }}
+                  style={{ justifyContent: 'flex-start', width: '100%', padding: '8px 10px' }}
+                >
+                  <Layers size={14} />
+                  <span>My Trips Hub</span>
+                </button>
+                
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: '4px', paddingTop: '4px' }}>
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => {
+                      logout();
+                      setActivePage('welcome');
+                      setProfileDropdownOpen(false);
+                    }}
+                    style={{ justifyContent: 'flex-start', width: '100%', padding: '8px 10px' }}
+                  >
+                    <LogOut size={14} />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

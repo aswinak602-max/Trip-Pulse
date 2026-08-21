@@ -30,10 +30,15 @@ class UserOut(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+class VerifyResetCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=1, max_length=10)
+
 class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str = Field(..., min_length=6)
-    confirm_password: str = Field(..., min_length=6)
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=1)
+    confirm_password: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 class UserProfileUpdate(BaseModel):
     name: Optional[str] = None

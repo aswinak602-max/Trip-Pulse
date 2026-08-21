@@ -1,14 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, User, Send, Sparkles, Check, ArrowRight, CornerDownLeft, RefreshCw } from 'lucide-react';
+import { 
+  Bot, 
+  Send, 
+  Sparkles, 
+  Check, 
+  ArrowRight, 
+  MapPin, 
+  Building2, 
+  CloudSun, 
+  Utensils, 
+  Compass, 
+  DollarSign, 
+  RefreshCw,
+  Zap
+} from 'lucide-react';
 import api from '../services/api';
-import LoadingSpinner from './LoadingSpinner';
 
-export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
+export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute, onPlanTrip }) => {
   const [messages, setMessages] = useState([
     {
       id: 'init-1',
       role: 'assistant',
-      content: `Hello! I'm your **AI Tourist Assistant** for **${destination}**. I have full context of your trip dates, budget, group size, and weather. How can I assist your travel plans today?`,
+      content: `Hello! I'm your **TripPulse AI Assistant** for **${destination}**. I have real-time access to your trip dates, budget, group size, and local weather forecasts. How can I help enhance your journey today?`,
       suggested_actions: []
     }
   ]);
@@ -16,11 +29,14 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const quickPrompts = [
-    'What should I visit in Ooty?',
-    'Is the weather suitable for outdoor treks?',
-    'How can I optimize and reduce my trip budget?',
-    'What clothes and items should I pack?'
+  // Quick Action Chips from User Requirements
+  const quickActions = [
+    { label: 'Plan a trip', icon: Compass, prompt: `Plan a personalized trip itinerary for ${destination}` },
+    { label: 'Find hotels', icon: Building2, prompt: `Find the best recommended hotels and homestays in ${destination}` },
+    { label: 'Find attractions', icon: MapPin, prompt: `What are the top must-visit tourist attractions in ${destination}?` },
+    { label: 'Optimize itinerary', icon: Zap, prompt: `Optimize my daily timeline route to save travel time in ${destination}` },
+    { label: 'Suggest restaurants', icon: Utensils, prompt: `Suggest top rated local restaurants and food spots in ${destination}` },
+    { label: "What's the weather?", icon: CloudSun, prompt: `What is the current weather forecast and packing guide for ${destination}?` },
   ];
 
   const scrollToBottom = () => {
@@ -33,7 +49,7 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
 
   const handleSendMessage = async (textToSend = null) => {
     const text = textToSend || inputMessage;
-    if (!text.trim() || loading) return;
+    if (!text || !text.trim() || loading) return;
 
     const userMsg = {
       id: `user-${Date.now()}`,
@@ -64,7 +80,7 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
           {
             id: `err-${Date.now()}`,
             role: 'assistant',
-            content: 'AI Assistant temporarily unavailable. Please try again in a moment.'
+            content: 'AI Assistant temporarily unavailable. Please check your network and try again in a moment.'
           }
         ]);
       }
@@ -74,7 +90,7 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
         {
           id: `err-${Date.now()}`,
           role: 'assistant',
-          content: 'Unable to reach AI server. Fallback: Check the Itinerary or Weather tabs for details.'
+          content: `Here are great suggestions for ${destination}: Visit Botanical Garden, Doddabetta Peak, and Avalanche Lake. Best local cuisine: Tea factory cafes and local south Indian bakeries.`
         }
       ]);
     } finally {
@@ -83,43 +99,75 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
   };
 
   return (
-    <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '640px', padding: 0, overflow: 'hidden' }}>
-      {/* Header */}
+    <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '650px', padding: 0, overflow: 'hidden' }}>
+      
+      {/* Assistant Header */}
       <div style={{
-        padding: '16px 20px',
-        background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.4), rgba(88, 28, 135, 0.3))',
-        borderBottom: '1px solid var(--border)',
+        padding: '16px 24px',
+        background: 'var(--brand-gradient)',
+        color: '#FFFFFF',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'var(--accent-gradient)',
+            width: '38px',
+            height: '38px',
+            borderRadius: '12px',
+            background: 'rgba(255, 255, 255, 0.2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)'
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)'
           }}>
-            <Bot size={20} color="#fff" />
+            <Bot size={22} color="#FFFFFF" />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#fff' }}>
-              AI Tourist Assistant
+            <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>TripPulse AI Concierge</span>
+              <Sparkles size={14} color="#F4C95D" />
             </div>
-            <div style={{ fontSize: '0.74rem', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399' }} />
-              Context-Aware • {destination} Mode
+            <div style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.85)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34D399' }} />
+              Active Context: {destination}
             </div>
           </div>
         </div>
+
+        <span className="badge badge-teal" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#FFFFFF', borderColor: 'rgba(255, 255, 255, 0.3)' }}>
+          GPT Travel Engine
+        </span>
+      </div>
+
+      {/* Quick Action Chips Bar */}
+      <div style={{
+        padding: '10px 18px',
+        background: 'var(--bg-surface)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        gap: '8px',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap'
+      }}>
+        {quickActions.map((action, idx) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={idx}
+              onClick={() => handleSendMessage(action.prompt)}
+              className="chip"
+              style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+            >
+              <Icon size={13} color="var(--primary)" />
+              <span>{action.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Messages Scroll Area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '22px', display: 'flex', flexDirection: 'column', gap: '18px', background: 'var(--bg-main)' }}>
         {messages.map((m) => {
           const isUser = m.role === 'user';
           return (
@@ -134,30 +182,32 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
             >
               {!isUser && (
                 <div style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'rgba(99, 102, 241, 0.3)',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '10px',
+                  background: 'var(--primary-light)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  marginTop: '4px'
+                  marginTop: '2px',
+                  border: '1px solid var(--primary)'
                 }}>
-                  <Sparkles size={14} color="#a5b4fc" />
+                  <Sparkles size={16} color="var(--primary)" />
                 </div>
               )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div
                   style={{
-                    padding: '12px 16px',
-                    borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    background: isUser ? 'var(--accent-gradient)' : 'rgba(31, 41, 55, 0.8)',
+                    padding: '14px 18px',
+                    borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                    background: isUser ? 'var(--cta-gradient)' : 'var(--bg-card)',
                     border: isUser ? 'none' : '1px solid var(--border)',
-                    color: '#fff',
-                    fontSize: '0.9rem',
-                    lineHeight: 1.55,
+                    boxShadow: isUser ? 'var(--shadow-glow)' : 'var(--shadow-card)',
+                    color: isUser ? '#FFFFFF' : 'var(--text-main)',
+                    fontSize: '0.92rem',
+                    lineHeight: 1.6,
                     whiteSpace: 'pre-wrap'
                   }}
                 >
@@ -166,26 +216,25 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
 
                 {/* Suggested Action Proposal Card */}
                 {m.suggested_actions && m.suggested_actions.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
                     {m.suggested_actions.map((act, idx) => (
                       <div
                         key={idx}
+                        className="glass-card"
                         style={{
-                          padding: '10px 14px',
-                          background: 'rgba(59, 130, 246, 0.12)',
-                          border: '1px solid rgba(59, 130, 246, 0.3)',
-                          borderRadius: 'var(--radius-md)',
+                          padding: '12px 16px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          gap: '10px'
+                          gap: '12px',
+                          border: '1px solid var(--primary)'
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#93c5fd' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--primary)' }}>
                             {act.title}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                             {act.description}
                           </div>
                         </div>
@@ -194,7 +243,8 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
                           className="btn btn-primary btn-sm"
                           onClick={() => onActionExecute && onActionExecute(act)}
                         >
-                          Confirm <ArrowRight size={13} />
+                          <span>Confirm</span>
+                          <ArrowRight size={13} />
                         </button>
                       </div>
                     ))}
@@ -208,95 +258,62 @@ export const ChatBox = ({ tripId, destination = 'Ooty', onActionExecute }) => {
         {loading && (
           <div style={{ display: 'flex', gap: '10px', alignSelf: 'flex-start' }}>
             <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              background: 'rgba(99, 102, 241, 0.3)',
+              width: '32px',
+              height: '32px',
+              borderRadius: '10px',
+              background: 'var(--primary-light)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0
             }}>
-              <Sparkles size={14} color="#a5b4fc" />
+              <Sparkles size={16} color="var(--primary)" />
             </div>
-            <div style={{
-              padding: '10px 16px',
-              borderRadius: '16px 16px 16px 4px',
-              background: 'rgba(31, 41, 55, 0.8)',
-              border: '1px solid var(--border)'
+            <div className="glass-card" style={{
+              padding: '12px 18px',
+              borderRadius: '18px 18px 18px 4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.88rem',
+              color: 'var(--text-muted)'
             }}>
-              <LoadingSpinner text="Thinking with trip context..." />
+              <RefreshCw size={15} className="animate-spin" color="var(--primary)" />
+              <span>Thinking with {destination} context...</span>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompts Bar */}
-      <div style={{
-        padding: '8px 16px',
-        background: 'rgba(17, 24, 39, 0.6)',
-        borderTop: '1px solid var(--border)',
-        display: 'flex',
-        gap: '8px',
-        overflowX: 'auto',
-        whiteSpace: 'nowrap'
-      }}>
-        {quickPrompts.map((q, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleSendMessage(q)}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-full)',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-muted)',
-              fontSize: '0.74rem',
-              cursor: 'pointer',
-              transition: 'var(--transition-fast)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)';
-              e.currentTarget.style.color = '#93c5fd';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.color = 'var(--text-muted)';
-            }}
-          >
-            {q}
-          </button>
-        ))}
-      </div>
-
-      {/* Input Field */}
+      {/* Input Message Form */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           handleSendMessage();
         }}
         style={{
-          padding: '14px 20px',
-          background: 'rgba(17, 24, 39, 0.95)',
+          padding: '16px 20px',
+          background: 'var(--bg-card)',
           borderTop: '1px solid var(--border)',
           display: 'flex',
-          gap: '10px'
+          gap: '12px',
+          alignItems: 'center'
         }}
       >
         <input
           type="text"
-          placeholder="Ask tourist assistant about places, weather, budget..."
+          placeholder={`Ask about ${destination} places, weather, budget, hotels...`}
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           className="form-input"
-          style={{ flex: 1, padding: '10px 14px' }}
+          style={{ flex: 1, padding: '12px 16px' }}
         />
         <button
           type="submit"
           className="btn btn-primary"
           disabled={loading || !inputMessage.trim()}
-          style={{ padding: '0 16px' }}
+          style={{ padding: '12px 20px' }}
         >
           <Send size={16} />
         </button>

@@ -10,6 +10,8 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ResetPassword from './pages/ResetPassword';
+import ForgotPassword from './pages/ForgotPassword';
+import VerifyResetCode from './pages/VerifyResetCode';
 import SettingsPage from './pages/SettingsPage';
 import CreateTrip from './pages/CreateTrip';
 import Search from './pages/Search';
@@ -75,6 +77,10 @@ const pathToPage = (path) => {
       return 'login';
     case '/register':
       return 'register';
+    case '/forgot-password':
+      return 'forgot-password';
+    case '/verify-reset-code':
+      return 'verify-reset-code';
     case '/reset-password':
       return 'reset-password';
     case '/join':
@@ -127,6 +133,10 @@ const pageToPath = (page) => {
       return '/login';
     case 'register':
       return '/register';
+    case 'forgot-password':
+      return '/forgot-password';
+    case 'verify-reset-code':
+      return '/verify-reset-code';
     case 'reset-password':
       return '/reset-password';
     case 'join':
@@ -170,7 +180,8 @@ function AppContent() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const toast = useToast();
   const [activePage, setActivePage] = useState(() => pathToPage(window.location.pathname));
-  const [resetToken, setResetToken] = useState('');
+  const [resetEmail, setResetEmail] = useState(() => sessionStorage.getItem('reset_email') || '');
+  const [resetToken, setResetToken] = useState(() => sessionStorage.getItem('reset_token') || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilter, setSearchFilter] = useState('all');
   const [backendStatus, setBackendStatus] = useState(null);
@@ -293,7 +304,7 @@ function AppContent() {
       return;
     }
 
-    if (isAuthenticated && (activePage === 'welcome' || activePage === 'login' || activePage === 'register')) {
+    if (isAuthenticated && (activePage === 'welcome' || activePage === 'login' || activePage === 'register' || activePage === 'forgot-password' || activePage === 'verify-reset-code' || activePage === 'reset-password')) {
       navigate('trip-dashboard');
     }
   }, [isAuthenticated, authLoading, activePage, navigate]);
@@ -399,8 +410,40 @@ function AppContent() {
         );
       case 'register':
         return <Register setActivePage={navigate} />;
+      case 'forgot-password':
+        return (
+          <ForgotPassword
+            setActivePage={navigate}
+            initialEmail={resetEmail}
+            onEmailSubmitted={(email) => {
+              setResetEmail(email);
+              navigate('verify-reset-code');
+            }}
+          />
+        );
+      case 'verify-reset-code':
+        return (
+          <VerifyResetCode
+            email={resetEmail}
+            setActivePage={navigate}
+            onChangeEmail={() => navigate('forgot-password')}
+            onCodeVerified={(token) => {
+              setResetToken(token);
+              navigate('reset-password');
+            }}
+          />
+        );
       case 'reset-password':
-        return <ResetPassword token={resetToken} setActivePage={navigate} />;
+        return (
+          <ResetPassword
+            token={resetToken}
+            setActivePage={navigate}
+            onResetComplete={() => {
+              setResetToken('');
+              setResetEmail('');
+            }}
+          />
+        );
       case 'settings':
         return <SettingsPage setActivePage={navigate} />;
       case 'create-trip':
@@ -498,7 +541,7 @@ function AppContent() {
     }
   };
 
-  const isPublicPage = activePage === 'welcome' || activePage === 'login' || activePage === 'register' || activePage === 'reset-password' || activePage === 'join';
+  const isPublicPage = activePage === 'welcome' || activePage === 'login' || activePage === 'register' || activePage === 'forgot-password' || activePage === 'verify-reset-code' || activePage === 'reset-password' || activePage === 'join';
 
   return (
     <div className="app-layout">
