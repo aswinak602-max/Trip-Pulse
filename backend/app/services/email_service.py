@@ -13,6 +13,54 @@ from typing import Optional, Tuple, Dict, Any
 
 from app.core.config import settings
 
+class IPv4SMTP(smtplib.SMTP):
+    """SMTP client that forces IPv4 resolution to prevent IPv6 routing failures on cloud containers."""
+    def _get_socket(self, host, port, timeout):
+        res = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        err = None
+        for af, socktype, proto, canonname, sa in res:
+            s = None
+            try:
+                s = socket.socket(af, socktype, proto)
+                if timeout is not None:
+                    s.settimeout(timeout)
+                s.connect(sa)
+                return s
+            except Exception as e:
+                err = e
+                if s:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+        if err:
+            raise err
+        raise OSError(f"Unable to establish IPv4 connection to {host}:{port}")
+
+class IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    """SMTP_SSL client that forces IPv4 resolution with SNI certificate verification."""
+    def _get_socket(self, host, port, timeout):
+        res = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        err = None
+        for af, socktype, proto, canonname, sa in res:
+            s = None
+            try:
+                s = socket.socket(af, socktype, proto)
+                if timeout is not None:
+                    s.settimeout(timeout)
+                s.connect(sa)
+                return self.context.wrap_socket(s, server_hostname=host)
+            except Exception as e:
+                err = e
+                if s:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+        if err:
+            raise err
+        raise OSError(f"Unable to establish IPv4 SSL connection to {host}:{port}")
+
 class EmailService:
     @property
     def smtp_host(self) -> str:
@@ -60,18 +108,18 @@ class EmailService:
 
     def _create_smtp_connection(self) -> smtplib.SMTP:
         """
-        Creates and authenticates an SMTP connection with timeouts, TLS/SSL,
-        and automatic dual-port fallback (587 STARTTLS <-> 465 SSL) for cloud reliability.
+        Creates and authenticates an SMTP connection with timeouts, STARTTLS/SSL,
+        IPv4 resolution prioritization, and automatic dual-port fallback (587 <-> 465).
         """
         context = ssl.create_default_context()
-        timeout = 15.0
+        timeout = 10.0
         primary_port = self.smtp_port
         fallback_port = 465 if primary_port == 587 else 587
 
         server = None
-        last_error = None
+        last_net_err = None
 
-        # 1. Try Primary Port
+        # 1. Primary Port - Standard Connection (STARTTLS for 587, SSL for 465)
         try:
             if primary_port == 465:
                 server = smtplib.SMTP_SSL(self.smtp_host, primary_port, context=context, timeout=timeout)
@@ -84,31 +132,60 @@ class EmailService:
 
             server.login(self.smtp_username, self.smtp_password)
             return server
-        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException) as e:
+        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException) as auth_err:
             if server:
                 try:
                     server.close()
                 except Exception:
                     pass
-            raise e
+            raise auth_err
         except (OSError, socket.error, socket.timeout, TimeoutError) as net_err:
-            last_error = net_err
+            last_net_err = net_err
             if server:
                 try:
                     server.close()
                 except Exception:
                     pass
 
-        # 2. Try Automatic Fallback Port (e.g. 465 SSL if 587 was blocked or timed out)
+        # 2. Primary Port - Direct IPv4 Socket Fallback (bypasses container IPv6 unreachable errors)
         try:
-            print(f"[TripPulse Email Service] Notice: Port {primary_port} failed ({type(last_error).__name__}). Trying fallback port {fallback_port}...")
-            if fallback_port == 465:
-                server = smtplib.SMTP_SSL(self.smtp_host, fallback_port, context=context, timeout=timeout)
+            if primary_port == 465:
+                server = IPv4SMTP_SSL(self.smtp_host, primary_port, context=context, timeout=timeout)
             else:
-                server = smtplib.SMTP(self.smtp_host, fallback_port, timeout=timeout)
+                server = IPv4SMTP(self.smtp_host, primary_port, timeout=timeout)
                 server.ehlo()
-                server.starttls(context=context)
+                if getattr(settings, "SMTP_USE_TLS", True):
+                    server.starttls(context=context)
+                    server.ehlo()
+
+            server.login(self.smtp_username, self.smtp_password)
+            return server
+        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException) as auth_err:
+            if server:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+            raise auth_err
+        except Exception as ipv4_err:
+            last_net_err = ipv4_err
+            if server:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+
+        # 3. Fallback Port (e.g. 465 SSL if 587 failed, or 587 STARTTLS if 465 failed)
+        try:
+            print(f"[TripPulse Email Service] Port {primary_port} failed ({type(last_net_err).__name__}). Trying fallback port {fallback_port}...")
+            if fallback_port == 465:
+                server = IPv4SMTP_SSL(self.smtp_host, fallback_port, context=context, timeout=timeout)
+            else:
+                server = IPv4SMTP(self.smtp_host, fallback_port, timeout=timeout)
                 server.ehlo()
+                if getattr(settings, "SMTP_USE_TLS", True):
+                    server.starttls(context=context)
+                    server.ehlo()
 
             server.login(self.smtp_username, self.smtp_password)
             return server
@@ -126,10 +203,7 @@ class EmailService:
         Returns (success, human_message, diagnostic_dict).
         """
         if not self.is_configured():
-            msg = (
-                "Email service is not configured on the server. "
-                "Please add SMTP_USERNAME and SMTP_PASSWORD (16-char Gmail App Password) to Render environment variables."
-            )
+            msg = "Email service is not configured."
             return False, msg, self.get_smtp_status_summary()
 
         try:
@@ -137,23 +211,16 @@ class EmailService:
             server.quit()
             return True, "SMTP connection and authentication successful.", self.get_smtp_status_summary()
         except smtplib.SMTPAuthenticationError as auth_err:
-            err_msg = (
-                "Email authentication failed. Please verify the 16-character Gmail App Password configured in Render "
-                "(Ensure 2-Step Verification is enabled: https://myaccount.google.com/apppasswords)."
-            )
+            err_msg = "Email authentication failed. Please check the production email configuration."
             print(f"[TripPulse Email Service] SMTPAuthenticationError: {auth_err}")
             return False, err_msg, self.get_smtp_status_summary()
-        except (socket.timeout, TimeoutError) as timeout_err:
-            err_msg = f"SMTP connection timed out connecting to {self.smtp_host}:{self.smtp_port}."
-            print(f"[TripPulse Email Service] Connection Timeout: {timeout_err}")
-            return False, err_msg, self.get_smtp_status_summary()
-        except OSError as os_err:
-            err_msg = f"Unable to reach the email server ({self.smtp_host}). Please verify Render environment settings."
-            print(f"[TripPulse Email Service] OSError: {os_err}")
+        except (socket.timeout, TimeoutError, OSError, socket.error) as net_err:
+            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
+            print(f"[TripPulse Email Service] Connection Error: {type(net_err).__name__}")
             return False, err_msg, self.get_smtp_status_summary()
         except Exception as e:
-            err_msg = f"SMTP connection error: {str(e)}"
-            print(f"[TripPulse Email Service] SMTP Error: {err_msg}")
+            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
+            print(f"[TripPulse Email Service] SMTP Error: {type(e).__name__}")
             return False, err_msg, self.get_smtp_status_summary()
 
     def send_test_email(self, recipient_email: str) -> Tuple[bool, str]:
@@ -165,7 +232,7 @@ class EmailService:
             return False, "Please provide a valid recipient email address."
 
         if not self.is_configured():
-            return False, "Email service is not configured. Please set SMTP_USERNAME and SMTP_PASSWORD in Render environment variables."
+            return False, "Email service is not configured."
 
         subject = "TripPulse Email Test"
         text_body = "This is a test email from TripPulse. If you received this, your SMTP configuration is working perfectly!"
@@ -203,12 +270,16 @@ class EmailService:
             print(f"[TripPulse Email Service] Sent test email to {clean_email} via SMTP.")
             return True, f"Test email sent successfully to {clean_email}."
         except smtplib.SMTPAuthenticationError:
-            err_msg = "Email authentication failed. Please verify the 16-character Gmail App Password configured in Render."
-            print(f"[TripPulse Email Service] Test Email Failed: {err_msg}")
+            err_msg = "Email authentication failed. Please check the production email configuration."
+            print(f"[TripPulse Email Service] Test Email Failed: Authentication Error")
+            return False, err_msg
+        except (socket.timeout, TimeoutError, OSError, socket.error):
+            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
+            print(f"[TripPulse Email Service] Test Email Failed: Network/Connection Error")
             return False, err_msg
         except Exception as e:
-            err_msg = f"Email delivery failed. Please check SMTP settings in Render."
-            print(f"[TripPulse Email Service] Test Email Failed: {type(e).__name__} ({str(e)})")
+            err_msg = "Unable to deliver verification email. Please check the production SMTP configuration."
+            print(f"[TripPulse Email Service] Test Email Failed: {type(e).__name__}")
             return False, err_msg
 
     def send_password_reset_code_email(self, recipient_email: str, verification_code: str, recipient_name: Optional[str] = None) -> Tuple[bool, str]:
@@ -289,10 +360,7 @@ TripPulse
 </html>"""
 
         if not self.is_configured():
-            msg = (
-                "Email service is not configured on the server. "
-                "Please add SMTP_USERNAME and SMTP_PASSWORD (16-char Gmail App Password) to Render environment variables."
-            )
+            msg = "Email service is not configured."
             print(f"[TripPulse Email Service] [CONFIG NOTICE] {msg}")
             return False, msg
 
@@ -313,20 +381,16 @@ TripPulse
             print(f"[TripPulse Email Service] Delivered verification OTP to {masked_target} via SMTP.")
             return True, "Verification email sent successfully."
         except smtplib.SMTPAuthenticationError as auth_err:
-            err_msg = "Email authentication failed. Please verify the 16-character Gmail App Password in Render."
+            err_msg = "Email authentication failed. Please check the production email configuration."
             print(f"[TripPulse Email Service] Email dispatch authentication error: {auth_err}")
             return False, err_msg
-        except (socket.timeout, TimeoutError):
-            err_msg = f"SMTP connection timed out connecting to {self.smtp_host}."
-            print(f"[TripPulse Email Service] SMTP timeout during dispatch to {clean_email}")
-            return False, err_msg
-        except OSError as os_err:
-            err_msg = f"Unable to reach the email server ({self.smtp_host}). Please verify Render environment settings."
-            print(f"[TripPulse Email Service] Network/OSError during email dispatch: {os_err}")
+        except (socket.timeout, TimeoutError, OSError, socket.error) as net_err:
+            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
+            print(f"[TripPulse Email Service] Network/Connection error during email dispatch: {type(net_err).__name__}")
             return False, err_msg
         except Exception as e:
-            err_msg = f"Unable to deliver verification email. Please check SMTP settings in Render."
-            print(f"[TripPulse Email Service] Email dispatch error: {type(e).__name__}: {e}")
+            err_msg = "Unable to deliver verification email. Please check the production SMTP configuration."
+            print(f"[TripPulse Email Service] Email dispatch error: {type(e).__name__}")
             return False, err_msg
 
     def send_welcome_email(self, recipient_email: str, recipient_name: str, auth_provider: str = "Google") -> bool:

@@ -345,7 +345,7 @@ def run_tests():
         # EXTRA ERROR TESTS: SMTP Failure simulation
         # ---------------------------------------------------------------------
         print("\n[EXTRA TEST] Verify SMTP Authentication Failure Handling")
-        with patch.object(email_service, "send_password_reset_code_email", return_value=(False, "Gmail SMTP authentication failed. Configure a Gmail App Password in backend/.env.")):
+        with patch.object(email_service, "send_password_reset_code_email", return_value=(False, "Email authentication failed. Please check the production email configuration.")):
             # Age previous records
             db.query(PasswordResetCode).filter(PasswordResetCode.email == test_email).update({
                 "created_at": datetime.utcnow() - timedelta(seconds=70)
@@ -354,7 +354,7 @@ def run_tests():
 
             res_smtp_err = client.post("/api/v1/auth/forgot-password", json={"email": test_email})
             assert res_smtp_err.status_code == 500
-            assert "Gmail SMTP authentication failed" in res_smtp_err.json()["message"]
+            assert "Email authentication failed" in res_smtp_err.json()["message"]
             print("  [PASS] SMTP Authentication failure correctly produces user-friendly error without false success.")
 
         # ---------------------------------------------------------------------
