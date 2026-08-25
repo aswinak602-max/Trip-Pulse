@@ -412,11 +412,19 @@ function AppContent() {
           />
         );
       case 'register':
-        return <Register setActivePage={navigate} />;
+        return (
+          <Register 
+            setActivePage={navigate} 
+            backendStatus={backendStatus}
+            loadingStatus={loadingHealth}
+          />
+        );
       case 'forgot-password':
         return (
           <ForgotPassword
             setActivePage={navigate}
+            backendStatus={backendStatus}
+            loadingStatus={loadingHealth}
             initialEmail={resetEmail}
             onEmailSubmitted={(email) => {
               setResetEmail(email);
@@ -429,6 +437,8 @@ function AppContent() {
           <VerifyResetCode
             email={resetEmail}
             setActivePage={navigate}
+            backendStatus={backendStatus}
+            loadingStatus={loadingHealth}
             onChangeEmail={() => navigate('forgot-password')}
             onCodeVerified={(token) => {
               setResetToken(token);
@@ -441,6 +451,8 @@ function AppContent() {
           <ResetPassword
             token={resetToken}
             setActivePage={navigate}
+            backendStatus={backendStatus}
+            loadingStatus={loadingHealth}
             onResetComplete={() => {
               setResetToken('');
               setResetEmail('');
@@ -544,28 +556,31 @@ function AppContent() {
     }
   };
 
-  const isPublicPage = activePage === 'welcome' || activePage === 'login' || activePage === 'register' || activePage === 'forgot-password' || activePage === 'verify-reset-code' || activePage === 'reset-password' || activePage === 'join';
+  const isAuthPage = activePage === 'login' || activePage === 'register' || activePage === 'forgot-password' || activePage === 'verify-reset-code' || activePage === 'reset-password';
+  const isPublicPage = activePage === 'welcome' || isAuthPage || activePage === 'join';
 
   return (
     <div className="app-layout">
-      <Navbar
-        searchQuery={searchQuery}
-        searchFilter={searchFilter}
-        onFilterChange={(filter) => {
-          setSearchFilter(filter);
-          if (isAuthenticated) navigate('search');
-        }}
-        onSearch={(query) => {
-          setSearchQuery(query);
-          if (query) navigate(isAuthenticated ? 'search' : 'login');
-        }}
-        backendStatus={backendStatus}
-        loadingStatus={loadingHealth}
-        activePage={activePage}
-        setActivePage={navigate}
-        isMobileNavOpen={isMobileNavOpen}
-        onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)}
-      />
+      {!isAuthPage && (
+        <Navbar
+          searchQuery={searchQuery}
+          searchFilter={searchFilter}
+          onFilterChange={(filter) => {
+            setSearchFilter(filter);
+            if (isAuthenticated) navigate('search');
+          }}
+          onSearch={(query) => {
+            setSearchQuery(query);
+            if (query) navigate(isAuthenticated ? 'search' : 'login');
+          }}
+          backendStatus={backendStatus}
+          loadingStatus={loadingHealth}
+          activePage={activePage}
+          setActivePage={navigate}
+          isMobileNavOpen={isMobileNavOpen}
+          onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)}
+        />
+      )}
       <div className="app-body">
         {!isPublicPage && isAuthenticated && (
           <Sidebar 

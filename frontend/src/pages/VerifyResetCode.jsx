@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Clock, RefreshCw, ArrowLeft, ArrowRight, AlertCircle, CheckCircle, Mail, AlertTriangle, Sparkles } from 'lucide-react';
+import { Shield, Clock, RefreshCw, ArrowLeft, ArrowRight, AlertCircle, CheckCircle, Mail, AlertTriangle, Sparkles, Compass, Sun, Moon } from 'lucide-react';
 import api from '../services/api';
+import { getRawApiUrl } from '../api/client';
+import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -11,12 +13,25 @@ export const VerifyResetCode = ({
   email: initialEmail = '',
   setActivePage,
   onCodeVerified,
-  onChangeEmail
+  onChangeEmail,
+  backendStatus,
+  loadingStatus = false
 }) => {
   const toast = useToast();
+  const { theme, toggleTheme, isDark } = useTheme();
   const [email, setEmail] = useState(
     initialEmail || sessionStorage.getItem('reset_email') || ''
   );
+  
+  // 3-state connection status: 'checking' | 'online' | 'offline'
+  let apiStatus = 'checking';
+  if (!loadingStatus) {
+    if (backendStatus?.status === 'online' || backendStatus?.status === 'ok' || backendStatus?.success === true) {
+      apiStatus = 'online';
+    } else {
+      apiStatus = 'offline';
+    }
+  }
   
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const inputRefs = useRef([]);
@@ -249,11 +264,108 @@ export const VerifyResetCode = ({
   return (
     <div style={{
       maxWidth: '480px',
-      margin: '40px auto',
+      margin: '24px auto',
+      padding: '0 16px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '24px'
+      gap: '16px'
     }}>
+      {/* Minimal Auth Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 4px'
+      }}>
+        <div 
+          onClick={() => setActivePage('welcome')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}
+          title="TripPulse Home"
+        >
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '9px',
+            background: 'var(--brand-gradient)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF'
+          }}>
+            <Compass size={18} />
+          </div>
+          <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+            TripPulse
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            borderRadius: 'var(--radius-full)',
+            background: apiStatus === 'online' 
+              ? 'rgba(16, 185, 129, 0.09)' 
+              : apiStatus === 'checking' 
+                ? 'rgba(245, 158, 11, 0.09)' 
+                : 'rgba(239, 68, 68, 0.09)',
+            border: `1px solid ${
+              apiStatus === 'online' 
+                ? 'rgba(16, 185, 129, 0.25)' 
+                : apiStatus === 'checking' 
+                  ? 'rgba(245, 158, 11, 0.25)' 
+                  : 'rgba(239, 68, 68, 0.25)'
+            }`,
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            color: apiStatus === 'online' 
+              ? 'var(--success)' 
+              : apiStatus === 'checking' 
+                ? 'var(--warning)' 
+                : 'var(--danger)'
+          }} title={
+            apiStatus === 'online' 
+              ? `Backend API and database are active (${getRawApiUrl()})` 
+              : apiStatus === 'checking' 
+                ? 'Connecting to TripPulse server...' 
+                : `Backend offline: Unable to reach ${getRawApiUrl()}`
+          }>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: apiStatus === 'online' 
+                ? 'var(--success)' 
+                : apiStatus === 'checking' 
+                  ? 'var(--warning)' 
+                  : 'var(--danger)',
+              boxShadow: apiStatus === 'online' ? '0 0 6px rgba(16, 185, 129, 0.6)' : 'none'
+            }} />
+            <span>
+              {apiStatus === 'online' ? 'API Online' : apiStatus === 'checking' ? 'Connecting...' : 'API Offline'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={toggleTheme}
+            title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+            style={{
+              padding: '5px 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              borderRadius: 'var(--radius-full)',
+              cursor: 'pointer'
+            }}
+            aria-label="Toggle Theme"
+          >
+            {isDark ? <Sun size={14} color="#F4C95D" /> : <Moon size={14} color="#0FA3B1" />}
+          </button>
+        </div>
+      </div>
       <div className="glass-card" style={{ padding: '40px 36px', boxShadow: 'var(--shadow-lg)' }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div style={{

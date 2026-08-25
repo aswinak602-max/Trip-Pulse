@@ -12,17 +12,21 @@ import {
   CheckCircle2,
   HelpCircle, 
   ExternalLink, 
-  X 
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import api from '../services/api';
-import { getApiBaseUrl } from '../api/client';
+import { getApiBaseUrl, getRawApiUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { initiateGoogleSignIn, exchangeOAuthCode, logOAuthDiagnostics, validateGoogleClientId, getGoogleClientId } from '../services/googleAuth';
 
 export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadingStatus = false }) => {
   const { login, isAuthenticated } = useAuth();
+  const { theme, toggleTheme, isDark } = useTheme();
   const toast = useToast();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -191,29 +195,129 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
   };
 
   return (
-    <div style={{
-      maxWidth: '1080px',
-      margin: '30px auto',
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      borderRadius: 'var(--radius-xl)',
-      overflow: 'hidden',
-      border: '1px solid var(--border)',
-      boxShadow: 'var(--shadow-lg)',
-      minHeight: '620px',
-      background: 'var(--bg-card)'
-    }} className="auth-split-wrapper">
-      
-      {/* Left Column: Inspirational Travel Visual + Quote */}
+    <div style={{ maxWidth: '1080px', margin: '24px auto', padding: '0 16px' }}>
+      {/* Minimal Auth Header with API Status and Theme Toggle */}
       <div style={{
-        position: 'relative',
-        background: `linear-gradient(135deg, rgba(11, 19, 43, 0.92) 0%, rgba(15, 163, 177, 0.75) 100%), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1000&q=80') center/cover`,
-        padding: '48px 40px',
         display: 'flex',
-        flexDirection: 'column',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        color: '#FFFFFF'
+        marginBottom: '16px',
+        padding: '0 4px'
       }}>
+        <div 
+          onClick={() => setActivePage('welcome')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}
+          title="TripPulse Home"
+        >
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '9px',
+            background: 'var(--brand-gradient)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF'
+          }}>
+            <Compass size={18} />
+          </div>
+          <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+            TripPulse
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Subtle API Health Status Indicator */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            borderRadius: 'var(--radius-full)',
+            background: apiStatus === 'online' 
+              ? 'rgba(16, 185, 129, 0.09)' 
+              : apiStatus === 'checking' 
+                ? 'rgba(245, 158, 11, 0.09)' 
+                : 'rgba(239, 68, 68, 0.09)',
+            border: `1px solid ${
+              apiStatus === 'online' 
+                ? 'rgba(16, 185, 129, 0.25)' 
+                : apiStatus === 'checking' 
+                  ? 'rgba(245, 158, 11, 0.25)' 
+                  : 'rgba(239, 68, 68, 0.25)'
+            }`,
+            fontSize: '0.74rem',
+            fontWeight: 700,
+            color: apiStatus === 'online' 
+              ? 'var(--success)' 
+              : apiStatus === 'checking' 
+                ? 'var(--warning)' 
+                : 'var(--danger)'
+          }} title={
+            apiStatus === 'online' 
+              ? `Backend API and database are active (${getRawApiUrl()})` 
+              : apiStatus === 'checking' 
+                ? 'Connecting to TripPulse server...' 
+                : `Backend offline: Unable to reach ${getRawApiUrl()}`
+          }>
+            <span style={{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              background: apiStatus === 'online' 
+                ? 'var(--success)' 
+                : apiStatus === 'checking' 
+                  ? 'var(--warning)' 
+                  : 'var(--danger)',
+              boxShadow: apiStatus === 'online' ? '0 0 8px rgba(16, 185, 129, 0.6)' : 'none'
+            }} />
+            <span>
+              {apiStatus === 'online' ? 'API Online' : apiStatus === 'checking' ? 'Connecting...' : 'API Offline'}
+            </span>
+          </div>
+
+          {/* Theme Switcher */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={toggleTheme}
+            title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+            style={{
+              padding: '6px 10px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              borderRadius: 'var(--radius-full)',
+              cursor: 'pointer'
+            }}
+            aria-label="Toggle Theme"
+          >
+            {isDark ? <Sun size={15} color="#F4C95D" /> : <Moon size={15} color="#0FA3B1" />}
+          </button>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        borderRadius: 'var(--radius-xl)',
+        overflow: 'hidden',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-lg)',
+        minHeight: '620px',
+        background: 'var(--bg-card)'
+      }} className="auth-split-wrapper">
+        
+        {/* Left Column: Inspirational Travel Visual + Quote */}
+        <div style={{
+          position: 'relative',
+          background: `linear-gradient(135deg, rgba(11, 19, 43, 0.92) 0%, rgba(15, 163, 177, 0.75) 100%), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1000&q=80') center/cover`,
+          padding: '48px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          color: '#FFFFFF'
+        }}>
         {/* Top Brand Tag */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
@@ -460,6 +564,7 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
           </button>
         </div>
       </div>
+    </div>
 
       {/* Google OAuth Setup Guide Modal */}
       {showOAuthHelpModal && (

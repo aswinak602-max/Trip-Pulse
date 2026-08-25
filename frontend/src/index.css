@@ -722,6 +722,9 @@ body::after {
   .grid-2, .grid-3, .grid-4 {
     grid-template-columns: 1fr;
   }
+  .auth-split-wrapper {
+    grid-template-columns: 1fr !important;
+  }
   .otp-box {
     width: 44px;
     height: 52px;
