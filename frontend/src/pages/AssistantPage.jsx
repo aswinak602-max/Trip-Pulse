@@ -35,7 +35,7 @@ export const AssistantPage = ({ trip, setActivePage }) => {
 
   return (
     <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      
+
       {/* Context Banner */}
       <div className="glass-card" style={{
         background: 'var(--hero-gradient)',
@@ -73,8 +73,8 @@ export const AssistantPage = ({ trip, setActivePage }) => {
       </div>
 
       {/* Main Chat Interface */}
-      <ChatBox 
-        tripId={tripId} 
+      <ChatBox
+        tripId={tripId}
         destination={destination}
         onActionExecute={handleActionExecute}
         onPlanTrip={() => setActivePage('create-trip')}

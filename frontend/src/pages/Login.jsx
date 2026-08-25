@@ -15,6 +15,7 @@ import {
   X 
 } from 'lucide-react';
 import api from '../services/api';
+import { getApiBaseUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -113,7 +114,8 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
     try {
       setOAuthLoading(true);
       setOAuthError('');
-      const res = await exchangeOAuthCode(code, redirectUri || 'http://localhost:8000/api/v1/auth/google/callback');
+      const defaultRedirectUri = `${getApiBaseUrl()}/auth/google/callback`;
+      const res = await exchangeOAuthCode(code, redirectUri || defaultRedirectUri);
 
       if (res.success && res.data) {
         login(res.data.user, res.data.access_token);
@@ -500,8 +502,8 @@ export const Login = ({ setActivePage, onOpenResetPassword, backendStatus, loadi
             }}>
               <li>Visit <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>Google Cloud Console Credentials <ExternalLink size={12} style={{ display: 'inline' }} /></a>.</li>
               <li>Create credentials → <strong>OAuth client ID</strong> → Application type: <strong>Web application</strong>.</li>
-              <li>Add Authorized JavaScript origins: <code>http://localhost:5174</code></li>
-              <li>Add Authorized redirect URIs: <code>http://localhost:8000/api/v1/auth/google/callback</code></li>
+              <li>Add Authorized JavaScript origins: <code>{typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5174'}</code></li>
+              <li>Add Authorized redirect URIs: <code>{`${getApiBaseUrl()}/auth/google/callback`}</code></li>
             </ol>
 
             <button

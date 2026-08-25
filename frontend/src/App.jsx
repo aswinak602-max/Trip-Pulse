@@ -1,33 +1,36 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, useToast } from './components/Toast';
 import { Compass } from 'lucide-react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import Welcome from './pages/Welcome';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ResetPassword from './pages/ResetPassword';
-import ForgotPassword from './pages/ForgotPassword';
-import VerifyResetCode from './pages/VerifyResetCode';
-import SettingsPage from './pages/SettingsPage';
-import CreateTrip from './pages/CreateTrip';
-import Search from './pages/Search';
-import DestinationDetails from './pages/DestinationDetails';
-import TripDashboard from './pages/TripDashboard';
-import ItineraryPage from './pages/ItineraryPage';
-import MapViewPage from './pages/MapViewPage';
-import CostPredictionPage from './pages/CostPredictionPage';
-import WeatherPage from './pages/WeatherPage';
-import ExpensesPage from './pages/ExpensesPage';
-import ReservationsPage from './pages/ReservationsPage';
-import MembersPage from './pages/MembersPage';
-import ChecklistPage from './pages/ChecklistPage';
-import AssistantPage from './pages/AssistantPage';
-import JoinTripPage from './pages/JoinTripPage';
+import LoadingSpinner from './components/LoadingSpinner';
 import api from './services/api';
+
+// Dynamic code-split lazy imports for all application pages
+const Welcome = lazy(() => import('./pages/Welcome'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const VerifyResetCode = lazy(() => import('./pages/VerifyResetCode'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const CreateTrip = lazy(() => import('./pages/CreateTrip'));
+const Search = lazy(() => import('./pages/Search'));
+const DestinationDetails = lazy(() => import('./pages/DestinationDetails'));
+const TripDashboard = lazy(() => import('./pages/TripDashboard'));
+const ItineraryPage = lazy(() => import('./pages/ItineraryPage'));
+const MapViewPage = lazy(() => import('./pages/MapViewPage'));
+const CostPredictionPage = lazy(() => import('./pages/CostPredictionPage'));
+const WeatherPage = lazy(() => import('./pages/WeatherPage'));
+const ExpensesPage = lazy(() => import('./pages/ExpensesPage'));
+const ReservationsPage = lazy(() => import('./pages/ReservationsPage'));
+const MembersPage = lazy(() => import('./pages/MembersPage'));
+const ChecklistPage = lazy(() => import('./pages/ChecklistPage'));
+const AssistantPage = lazy(() => import('./pages/AssistantPage'));
+const JoinTripPage = lazy(() => import('./pages/JoinTripPage'));
 
 const PROTECTED_PAGES = new Set([
   'dashboard',
@@ -573,7 +576,9 @@ function AppContent() {
           />
         )}
         <main className="main-content" style={{ width: '100%' }}>
-          {renderContent()}
+          <Suspense fallback={<LoadingSpinner fullScreen text="Loading page..." />}>
+            {renderContent()}
+          </Suspense>
         </main>
       </div>
     </div>

@@ -15,7 +15,7 @@ import {
   Eye,
   ArrowRight
 } from 'lucide-react';
-import api from '../services/api';
+import api, { getWsUrl } from '../services/api';
 import LeafletMap from '../components/LeafletMap';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -86,9 +86,7 @@ export const MapViewPage = ({ trip, directionsTarget, onClearDirectionsTarget, s
   useEffect(() => {
     if (!tripId) return;
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/trips/${tripId}/location`;
+    const wsUrl = getWsUrl(`/ws/trips/${tripId}/location`);
 
     let socket = null;
     try {

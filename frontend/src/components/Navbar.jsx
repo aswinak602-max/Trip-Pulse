@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { getRawApiUrl } from '../api/client';
 
 export const Navbar = ({ 
   backendStatus,
@@ -200,10 +201,10 @@ export const Navbar = ({
               : 'var(--danger)'
         }} title={
           isApiOnline 
-            ? 'Backend API and SQLite database are active at http://localhost:8000' 
+            ? `Backend API and database are active (${getRawApiUrl()})` 
             : isApiChecking 
               ? 'Connecting to TripPulse server...' 
-              : 'Backend offline: Check that http://localhost:8000 is running'
+              : `Backend offline: Unable to reach ${getRawApiUrl()}`
         }>
           <span style={{
             width: '7px',

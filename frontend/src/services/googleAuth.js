@@ -1,4 +1,4 @@
-import api from './api';
+import api, { getRawApiUrl, getApiBaseUrl } from './api';
 
 /**
  * Normalizes and extracts the Google Client ID from frontend environment
@@ -151,8 +151,7 @@ export const initiateGoogleSignIn = async ({
             } else {
               onError(nonOAuthErr?.message || 'Google Sign-In popup unavailable. Retrying with full redirect...');
               // Fallback to redirect flow
-              const rawApi = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-              const backendOAuthUrl = `${rawApi.replace(/\/+$/, '')}/api/v1/auth/google`;
+              const backendOAuthUrl = `${getApiBaseUrl()}/auth/google`;
               window.location.href = backendOAuthUrl;
             }
           }
@@ -167,8 +166,7 @@ export const initiateGoogleSignIn = async ({
     }
 
     // 2. Fallback to Backend-Initiated OAuth 2.0 Redirection Flow
-    const rawApi = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    const backendOAuthUrl = `${rawApi.replace(/\/+$/, '')}/api/v1/auth/google`;
+    const backendOAuthUrl = `${getApiBaseUrl()}/auth/google`;
     window.location.href = backendOAuthUrl;
   } catch (err) {
     onEnd();
@@ -198,8 +196,7 @@ export const logOAuthDiagnostics = (serverConfig = null) => {
 
   const clientId = getGoogleClientId(serverConfig);
   const validation = validateGoogleClientId(clientId);
-  const rawApi = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-  const backendUrl = rawApi.endsWith('/api/v1') ? rawApi : `${rawApi.replace(/\/+$/, '')}/api/v1`;
+  const backendUrl = getApiBaseUrl();
   const frontendUrl = window.location.origin;
   const callbackUrl = `${frontendUrl}/login`;
 
