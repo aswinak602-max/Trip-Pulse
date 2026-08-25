@@ -178,7 +178,10 @@ class CostPredictorML:
     def _initialize_or_load_model(self):
         if os.path.exists(MODEL_PATH):
             try:
-                saved = joblib.load(MODEL_PATH)
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    saved = joblib.load(MODEL_PATH)
                 self.model = saved.get("model")
                 if "metrics" in saved:
                     self.metrics.update(saved["metrics"])

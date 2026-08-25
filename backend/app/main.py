@@ -117,24 +117,12 @@ app = FastAPI(
 )
 
 
-# CORS setup with explicit development origins and regex support for 5176/5175/5174/5173
-cors_origins = [
-    "http://localhost:5176",
-    "http://127.0.0.1:5176",
-    "http://localhost:5175",
-    "http://127.0.0.1:5175",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
+# CORS configuration: dynamically loads allowed origins from settings / env vars,
+# and supports local dev ports as well as Vercel preview/production domains (*.vercel.app)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://[a-zA-Z0-9_-]+\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -201,7 +189,7 @@ app.include_router(assistant_router, prefix=settings.API_V1_STR)
 # Include WebSocket router
 app.include_router(ws_location_router)
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {
         "success": True,
@@ -213,7 +201,7 @@ def root():
         "message": "Welcome to AI-Powered Intelligent Trip Planner API"
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def root_health():
     return {
         "status": "ok",

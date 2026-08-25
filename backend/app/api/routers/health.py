@@ -7,7 +7,7 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
-@router.get("")
+@router.api_route("", methods=["GET", "HEAD"])
 def check_health(db: Session = Depends(get_db)):
     try:
         # Test database connection

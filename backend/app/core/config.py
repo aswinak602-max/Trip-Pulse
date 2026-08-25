@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Union, Any
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI-Powered Intelligent Trip Planner"
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./trip_planner.db"
     
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:5174",
         "http://127.0.0.1:5174",
         "http://localhost:5175",
@@ -30,6 +30,52 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000"
     ]
+
+    @property
+    def cors_origins(self) -> List[str]:
+        origins = set()
+        # Default local development origins
+        default_dev_origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+            "http://localhost:5175",
+            "http://127.0.0.1:5175",
+            "http://localhost:5176",
+            "http://127.0.0.1:5176",
+            "http://localhost:5177",
+            "http://127.0.0.1:5177",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+        for orig in default_dev_origins:
+            origins.add(orig)
+            
+        if self.clean_frontend_url:
+            origins.add(self.clean_frontend_url)
+            
+        raw_origins = self.BACKEND_CORS_ORIGINS
+        if isinstance(raw_origins, str):
+            for o in raw_origins.split(","):
+                clean = o.strip().strip('"\'').rstrip("/")
+                if clean:
+                    origins.add(clean)
+        elif isinstance(raw_origins, (list, tuple, set)):
+            for o in raw_origins:
+                clean = str(o).strip().strip('"\'').rstrip("/")
+                if clean:
+                    origins.add(clean)
+
+        # Also parse CORS_ORIGINS or extra env vars if supplied on hosting platforms
+        extra_cors = os.environ.get("CORS_ORIGINS", "")
+        if extra_cors:
+            for o in extra_cors.split(","):
+                clean = o.strip().strip('"\'').rstrip("/")
+                if clean:
+                    origins.add(clean)
+                    
+        return list(origins)
 
     
     # External APIs (with graceful fallbacks)
