@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     
     # CORS
     BACKEND_CORS_ORIGINS: Union[List[str], str] = [
+        "https://trip-pulse-pi.vercel.app",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
         "http://localhost:5175",
@@ -34,8 +35,9 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         origins = set()
-        # Default local development origins
+        # Default local development and production origins
         default_dev_origins = [
+            "https://trip-pulse-pi.vercel.app",
             "http://localhost:5173",
             "http://127.0.0.1:5173",
             "http://localhost:5174",
@@ -152,11 +154,16 @@ class Settings(BaseSettings):
     @property
     def clean_smtp_password(self) -> str:
         raw = self.SMTP_PASSWORD or ""
-        return raw.strip().strip('"\'')
+        clean = raw.strip().strip('"\'')
+        # Google App Passwords are 16 characters often presented as 4 groups of 4 with spaces (e.g. "abcd efgh ijkl mnop")
+        # If it's a 16-char code with spaces (19 chars total), strip the internal spaces
+        if len(clean) == 19 and clean.count(" ") == 3:
+            clean = clean.replace(" ", "")
+        return clean
 
     @property
     def clean_smtp_from(self) -> str:
-        raw = self.SMTP_FROM or self.EMAIL_FROM or self.EMAILS_FROM_EMAIL or self.clean_smtp_username or "notifications@trippulse.app"
+        raw = self.SMTP_FROM or self.EMAIL_FROM or self.clean_smtp_username or self.EMAILS_FROM_EMAIL or "notifications@trippulse.app"
         return raw.strip().strip('"\'')
 
     @property

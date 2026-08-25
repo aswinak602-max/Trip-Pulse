@@ -44,12 +44,32 @@ def run_tests():
     auth_headers = {"Authorization": f"Bearer {token}"}
     print("[PASS] 3. User Login & JWT Generation OK")
 
-    # 3. Forgot Password & Reset Password Flow
+    # 3. Forgot Password & Reset Password OTP Flow
     forgot_res = client.post("/api/v1/auth/forgot-password", json={"email": email})
     assert forgot_res.status_code == 200, f"Forgot password failed: {forgot_res.text}"
-    reset_token = forgot_res.json()["data"]["demo_token"]
-    assert reset_token, "No reset token generated"
-    print("[PASS] 4. Forgot-Password Token generated successfully")
+    print("[PASS] 4. Forgot-Password Code requested successfully")
+
+    # In integration test, verify code via database record
+    from app.core.database import SessionLocal
+    from app.models.user import PasswordResetCode
+    from app.api.routers.auth import hash_verification_code
+    db = SessionLocal()
+    reset_entry = db.query(PasswordResetCode).filter(
+        PasswordResetCode.email == email,
+        PasswordResetCode.is_used == False
+    ).order_by(PasswordResetCode.created_at.desc()).first()
+    assert reset_entry is not None, "PasswordResetCode record not found"
+    
+    # Verify code and obtain reset token
+    test_code = "123456"
+    reset_entry.code_hash = hash_verification_code(email, test_code)
+    db.commit()
+    db.close()
+
+    verify_res = client.post("/api/v1/auth/verify-reset-code", json={"email": email, "code": test_code})
+    assert verify_res.status_code == 200, f"Code verification failed: {verify_res.text}"
+    reset_token = verify_res.json()["data"]["reset_token"]
+    assert reset_token, "No reset token returned from verify-reset-code"
 
     new_password = "UpdatedPassword456!"
     reset_res = client.post("/api/v1/auth/reset-password", json={
@@ -58,7 +78,7 @@ def run_tests():
         "confirm_password": new_password
     })
     assert reset_res.status_code == 200, f"Reset password failed: {reset_res.text}"
-    print("[PASS] 5. Reset-Password completed successfully")
+    print("[PASS] 5. Reset-Password completed successfully with OTP verification")
 
     # Re-login with new password
     new_login_res = client.post("/api/v1/auth/login", json={

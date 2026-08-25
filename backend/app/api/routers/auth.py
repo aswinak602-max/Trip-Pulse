@@ -227,8 +227,8 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
             recipient_name=user.name if user else None
         )
     except Exception as e:
-        err_detail = f"Email dispatch failed: {str(e)}"
-        print(f"[TripPulse Auth] Email dispatch exception: {e}")
+        err_detail = "Unable to send verification email. Please check server email configuration."
+        print(f"[TripPulse Auth] Email dispatch exception: {type(e).__name__}: {e}")
 
     if not email_sent:
         # Invalidate the record so the user isn't blocked by cooldown on retry

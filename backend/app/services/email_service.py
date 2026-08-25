@@ -60,22 +60,65 @@ class EmailService:
 
     def _create_smtp_connection(self) -> smtplib.SMTP:
         """
-        Creates and authenticates an SMTP connection with timeouts and TLS/SSL.
+        Creates and authenticates an SMTP connection with timeouts, TLS/SSL,
+        and automatic dual-port fallback (587 STARTTLS <-> 465 SSL) for cloud reliability.
         """
         context = ssl.create_default_context()
         timeout = 15.0
+        primary_port = self.smtp_port
+        fallback_port = 465 if primary_port == 587 else 587
 
-        if self.smtp_port == 465:
-            server = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, context=context, timeout=timeout)
-        else:
-            server = smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=timeout)
-            server.ehlo()
-            if getattr(settings, "SMTP_USE_TLS", True):
+        server = None
+        last_error = None
+
+        # 1. Try Primary Port
+        try:
+            if primary_port == 465:
+                server = smtplib.SMTP_SSL(self.smtp_host, primary_port, context=context, timeout=timeout)
+            else:
+                server = smtplib.SMTP(self.smtp_host, primary_port, timeout=timeout)
+                server.ehlo()
+                if getattr(settings, "SMTP_USE_TLS", True):
+                    server.starttls(context=context)
+                    server.ehlo()
+
+            server.login(self.smtp_username, self.smtp_password)
+            return server
+        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException) as e:
+            if server:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+            raise e
+        except (OSError, socket.error, socket.timeout, TimeoutError) as net_err:
+            last_error = net_err
+            if server:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+
+        # 2. Try Automatic Fallback Port (e.g. 465 SSL if 587 was blocked or timed out)
+        try:
+            print(f"[TripPulse Email Service] Notice: Port {primary_port} failed ({type(last_error).__name__}). Trying fallback port {fallback_port}...")
+            if fallback_port == 465:
+                server = smtplib.SMTP_SSL(self.smtp_host, fallback_port, context=context, timeout=timeout)
+            else:
+                server = smtplib.SMTP(self.smtp_host, fallback_port, timeout=timeout)
+                server.ehlo()
                 server.starttls(context=context)
                 server.ehlo()
 
-        server.login(self.smtp_username, self.smtp_password)
-        return server
+            server.login(self.smtp_username, self.smtp_password)
+            return server
+        except Exception as fallback_err:
+            if server:
+                try:
+                    server.close()
+                except Exception:
+                    pass
+            raise fallback_err
 
     def diagnose_smtp_connection(self) -> Tuple[bool, str, Dict[str, Any]]:
         """
@@ -84,9 +127,8 @@ class EmailService:
         """
         if not self.is_configured():
             msg = (
-                "SMTP configuration is incomplete in backend/.env. "
-                "Please configure SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, "
-                "SMTP_USERNAME=your_gmail@gmail.com, and SMTP_PASSWORD=your_16_char_app_password."
+                "Email service is not configured on the server. "
+                "Please add SMTP_USERNAME and SMTP_PASSWORD (16-char Gmail App Password) to Render environment variables."
             )
             return False, msg, self.get_smtp_status_summary()
 
@@ -95,19 +137,22 @@ class EmailService:
             server.quit()
             return True, "SMTP connection and authentication successful.", self.get_smtp_status_summary()
         except smtplib.SMTPAuthenticationError as auth_err:
-            error_code = getattr(auth_err, "smtp_code", None)
             err_msg = (
-                "Gmail SMTP authentication failed. Please configure a 16-character Gmail App Password in backend/.env "
-                "(Ensure 2-Step Verification is enabled on your Google Account: https://myaccount.google.com/apppasswords)."
+                "Email authentication failed. Please verify the 16-character Gmail App Password configured in Render "
+                "(Ensure 2-Step Verification is enabled: https://myaccount.google.com/apppasswords)."
             )
-            print(f"[TripPulse Email Service] SMTPAuthenticationError ({error_code}): {auth_err}")
+            print(f"[TripPulse Email Service] SMTPAuthenticationError: {auth_err}")
             return False, err_msg, self.get_smtp_status_summary()
         except (socket.timeout, TimeoutError) as timeout_err:
             err_msg = f"SMTP connection timed out connecting to {self.smtp_host}:{self.smtp_port}."
             print(f"[TripPulse Email Service] Connection Timeout: {timeout_err}")
             return False, err_msg, self.get_smtp_status_summary()
+        except OSError as os_err:
+            err_msg = f"Unable to reach the email server ({self.smtp_host}). Please verify Render environment settings."
+            print(f"[TripPulse Email Service] OSError: {os_err}")
+            return False, err_msg, self.get_smtp_status_summary()
         except Exception as e:
-            err_msg = f"SMTP connection error: {type(e).__name__} - {str(e)}"
+            err_msg = f"SMTP connection error: {str(e)}"
             print(f"[TripPulse Email Service] SMTP Error: {err_msg}")
             return False, err_msg, self.get_smtp_status_summary()
 
@@ -120,7 +165,7 @@ class EmailService:
             return False, "Please provide a valid recipient email address."
 
         if not self.is_configured():
-            return False, "SMTP is not configured in backend/.env. Set SMTP_USERNAME and SMTP_PASSWORD (Gmail App Password)."
+            return False, "Email service is not configured. Please set SMTP_USERNAME and SMTP_PASSWORD in Render environment variables."
 
         subject = "TripPulse Email Test"
         text_body = "This is a test email from TripPulse. If you received this, your SMTP configuration is working perfectly!"
@@ -158,12 +203,12 @@ class EmailService:
             print(f"[TripPulse Email Service] Sent test email to {clean_email} via SMTP.")
             return True, f"Test email sent successfully to {clean_email}."
         except smtplib.SMTPAuthenticationError:
-            err_msg = "Gmail SMTP authentication failed. Configure a Gmail App Password in backend/.env."
+            err_msg = "Email authentication failed. Please verify the 16-character Gmail App Password configured in Render."
             print(f"[TripPulse Email Service] Test Email Failed: {err_msg}")
             return False, err_msg
         except Exception as e:
-            err_msg = f"Email delivery failed: {type(e).__name__} ({str(e)})"
-            print(f"[TripPulse Email Service] Test Email Failed: {err_msg}")
+            err_msg = f"Email delivery failed. Please check SMTP settings in Render."
+            print(f"[TripPulse Email Service] Test Email Failed: {type(e).__name__} ({str(e)})")
             return False, err_msg
 
     def send_password_reset_code_email(self, recipient_email: str, verification_code: str, recipient_name: Optional[str] = None) -> Tuple[bool, str]:
@@ -245,8 +290,8 @@ TripPulse
 
         if not self.is_configured():
             msg = (
-                "Email service is not configured. Please set SMTP_USERNAME and SMTP_PASSWORD "
-                "(Gmail App Password) in backend/.env to send verification emails."
+                "Email service is not configured on the server. "
+                "Please add SMTP_USERNAME and SMTP_PASSWORD (16-char Gmail App Password) to Render environment variables."
             )
             print(f"[TripPulse Email Service] [CONFIG NOTICE] {msg}")
             return False, msg
@@ -264,19 +309,24 @@ TripPulse
             server.sendmail(self.from_email, clean_email, msg.as_string())
             server.quit()
 
-            print(f"[TripPulse Email Service] Delivered verification OTP to {clean_email} via SMTP.")
+            masked_target = f"{clean_email[:3]}...@{clean_email.split('@')[-1]}"
+            print(f"[TripPulse Email Service] Delivered verification OTP to {masked_target} via SMTP.")
             return True, "Verification email sent successfully."
         except smtplib.SMTPAuthenticationError as auth_err:
-            err_msg = "Gmail SMTP authentication failed. Configure a Gmail App Password in backend/.env."
-            print(f"[TripPulse Email Service] Email dispatch authentication failed: {auth_err}")
+            err_msg = "Email authentication failed. Please verify the 16-character Gmail App Password in Render."
+            print(f"[TripPulse Email Service] Email dispatch authentication error: {auth_err}")
             return False, err_msg
         except (socket.timeout, TimeoutError):
-            err_msg = f"SMTP connection timed out connecting to {self.smtp_host}:{self.smtp_port}."
+            err_msg = f"SMTP connection timed out connecting to {self.smtp_host}."
             print(f"[TripPulse Email Service] SMTP timeout during dispatch to {clean_email}")
             return False, err_msg
+        except OSError as os_err:
+            err_msg = f"Unable to reach the email server ({self.smtp_host}). Please verify Render environment settings."
+            print(f"[TripPulse Email Service] Network/OSError during email dispatch: {os_err}")
+            return False, err_msg
         except Exception as e:
-            err_msg = f"Unable to send the verification email: {type(e).__name__}"
-            print(f"[TripPulse Email Service] Failed to send email via SMTP to {clean_email}: {type(e).__name__}: {e}")
+            err_msg = f"Unable to deliver verification email. Please check SMTP settings in Render."
+            print(f"[TripPulse Email Service] Email dispatch error: {type(e).__name__}: {e}")
             return False, err_msg
 
     def send_welcome_email(self, recipient_email: str, recipient_name: str, auth_provider: str = "Google") -> bool:
