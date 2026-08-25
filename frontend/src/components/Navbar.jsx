@@ -70,17 +70,19 @@ export const Navbar = ({
       zIndex: 50,
       gap: '16px'
     }}>
-      {/* Left: Mobile Toggle + TripPulse Brand Logo */}
+      {/* Left: Mobile Toggle (when authenticated) + TripPulse Brand Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        <button
-          onClick={onToggleMobileNav}
-          className="btn btn-ghost"
-          style={{ padding: '6px', display: 'none' }}
-          id="mobile-nav-toggle"
-          aria-label="Toggle navigation menu"
-        >
-          {isMobileNavOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
+        {isAuthenticated && (
+          <button
+            onClick={onToggleMobileNav}
+            className="btn btn-ghost"
+            style={{ padding: '6px', display: 'none' }}
+            id="mobile-nav-toggle"
+            aria-label="Toggle navigation menu"
+          >
+            {isMobileNavOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        )}
 
         <div 
           onClick={() => setActivePage(isAuthenticated ? 'dashboard' : 'welcome')} 
@@ -116,60 +118,62 @@ export const Navbar = ({
         </div>
       </div>
 
-      {/* Center: Desktop Navigation Links */}
-      <nav style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        background: 'var(--bg-surface)',
-        padding: '4px 6px',
-        borderRadius: 'var(--radius-full)',
-        border: '1px solid var(--border)'
-      }} className="desktop-nav">
-        {navLinks.map((link) => {
-          const Icon = link.icon;
-          const isActive = activePage === link.id && (!link.isFavorite || activePage === 'search');
-          return (
-            <button
-              key={link.label}
-              onClick={() => setActivePage(link.id)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                border: 'none',
-                background: isActive ? 'var(--bg-card)' : 'transparent',
-                color: isActive ? 'var(--primary)' : 'var(--text-muted)',
-                fontSize: '0.84rem',
-                fontWeight: isActive ? 700 : 600,
-                cursor: 'pointer',
-                transition: 'var(--transition-fast)',
-                boxShadow: isActive ? 'var(--shadow-xs)' : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.color = 'var(--text-main)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.color = 'var(--text-muted)';
-                }
-              }}
-            >
-              <Icon size={15} style={{ color: isActive ? 'var(--primary)' : 'var(--text-dim)' }} />
-              <span>{link.label}</span>
-              {link.badge && (
-                <span className="badge badge-coral" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
-                  {link.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Center: Desktop Navigation Links (Only shown when Authenticated) */}
+      {isAuthenticated && (
+        <nav style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          background: 'var(--bg-surface)',
+          padding: '4px 6px',
+          borderRadius: 'var(--radius-full)',
+          border: '1px solid var(--border)'
+        }} className="desktop-nav">
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = activePage === link.id && (!link.isFavorite || activePage === 'search');
+            return (
+              <button
+                key={link.label}
+                onClick={() => setActivePage(link.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: 'var(--radius-full)',
+                  border: 'none',
+                  background: isActive ? 'var(--bg-card)' : 'transparent',
+                  color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                  fontSize: '0.84rem',
+                  fontWeight: isActive ? 700 : 600,
+                  cursor: 'pointer',
+                  transition: 'var(--transition-fast)',
+                  boxShadow: isActive ? 'var(--shadow-xs)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = 'var(--text-main)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = 'var(--text-muted)';
+                  }
+                }}
+              >
+                <Icon size={15} style={{ color: isActive ? 'var(--primary)' : 'var(--text-dim)' }} />
+                <span>{link.label}</span>
+                {link.badge && (
+                  <span className="badge badge-coral" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
+                    {link.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
       {/* Right: API Status, Theme Switcher, Notifications & Auth */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
