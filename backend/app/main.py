@@ -85,28 +85,25 @@ def log_oauth_startup_banner():
     print(f"  * GOOGLE_CLIENT_ID Status         : {cid_status}")
     print(f"  * GOOGLE_CLIENT_SECRET Status     : {secret_status}")
     print(f"  * Google OAuth Ready              : {'YES (Ready for Live Login)' if settings.is_google_auth_ready() else 'NO (Set real Google Web Client ID in .env)'}")
-def log_smtp_startup_banner():
-    host = settings.clean_smtp_host
-    port = settings.clean_smtp_port
-    user = settings.clean_smtp_username
-    has_user = bool(user and "@" in user)
-    has_pwd = bool(settings.clean_smtp_password and not settings.is_smtp_password_placeholder())
-    from_addr = settings.clean_smtp_from
-    is_ready = settings.is_smtp_configured()
+def log_email_startup_banner():
+    is_resend_ready = settings.is_resend_configured()
+    resend_key = settings.clean_resend_api_key
+    masked_key = f"{resend_key[:5]}...{resend_key[-3:]}" if (is_resend_ready and len(resend_key) >= 8) else ("CONFIGURED" if is_resend_ready else "NOT CONFIGURED")
+    email_from = settings.clean_email_from
 
     print("=" * 70)
-    print(" TripPulse Backend - SMTP Email Diagnostics")
+    print(" TripPulse Backend - Resend Email API Diagnostics")
     print("=" * 70)
-    print(f"  * SMTP_HOST                       : {host}")
-    print(f"  * SMTP_PORT                       : {port}")
-    print(f"  * SMTP_USERNAME                   : {'configured' if has_user else 'NOT CONFIGURED'}")
-    print(f"  * SMTP_PASSWORD                   : {'configured (Hidden)' if has_pwd else 'NOT CONFIGURED (Required: Gmail App Password)'}")
-    print(f"  * SMTP_FROM                       : {from_addr}")
-    print(f"  * SMTP Service Ready              : {'YES (Ready to send OTP emails)' if is_ready else 'NO (Set SMTP_USERNAME & SMTP_PASSWORD in .env)'}")
+    print(f"  * Provider                        : Resend HTTPS API (Render Free Compatible)")
+    print(f"  * RESEND_API_KEY                  : {masked_key}")
+    print(f"  * EMAIL_FROM                      : {email_from}")
+    print(f"  * Email Delivery Ready            : {'YES (Ready to send OTP emails)' if is_resend_ready else 'NO (Set RESEND_API_KEY in Render Environment)'}")
+    if not is_resend_ready:
+        print(f"  * NOTICE                          : Set RESEND_API_KEY in Render dashboard to enable password reset OTP delivery.")
     print("=" * 70)
 
 log_oauth_startup_banner()
-log_smtp_startup_banner()
+log_email_startup_banner()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

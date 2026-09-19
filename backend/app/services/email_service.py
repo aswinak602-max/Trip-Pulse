@@ -1,301 +1,190 @@
 """
 TripPulse Email Service.
-Handles transactional notifications, sign-in confirmations, password recovery OTP emails,
-and SMTP connection diagnostics with full Gmail App Password support.
+Handles transactional notifications, sign-in confirmations, and password recovery OTP emails
+via the Resend HTTPS Email API (Render Free plan compatible).
 """
 
-import smtplib
-import ssl
-import socket
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Optional, Tuple, Dict, Any
+import os
+import re
+from typing import Optional, Tuple, Dict, Any, List
+
+import resend
 
 from app.core.config import settings
 
-class IPv4SMTP(smtplib.SMTP):
-    """SMTP client that forces IPv4 resolution to prevent IPv6 routing failures on cloud containers."""
-    def _get_socket(self, host, port, timeout):
-        res = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        err = None
-        for af, socktype, proto, canonname, sa in res:
-            s = None
-            try:
-                s = socket.socket(af, socktype, proto)
-                if timeout is not None:
-                    s.settimeout(timeout)
-                s.connect(sa)
-                return s
-            except Exception as e:
-                err = e
-                if s:
-                    try:
-                        s.close()
-                    except Exception:
-                        pass
-        if err:
-            raise err
-        raise OSError(f"Unable to establish IPv4 connection to {host}:{port}")
-
-class IPv4SMTP_SSL(smtplib.SMTP_SSL):
-    """SMTP_SSL client that forces IPv4 resolution with SNI certificate verification."""
-    def _get_socket(self, host, port, timeout):
-        res = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        err = None
-        for af, socktype, proto, canonname, sa in res:
-            s = None
-            try:
-                s = socket.socket(af, socktype, proto)
-                if timeout is not None:
-                    s.settimeout(timeout)
-                s.connect(sa)
-                return self.context.wrap_socket(s, server_hostname=host)
-            except Exception as e:
-                err = e
-                if s:
-                    try:
-                        s.close()
-                    except Exception:
-                        pass
-        if err:
-            raise err
-        raise OSError(f"Unable to establish IPv4 SSL connection to {host}:{port}")
 
 class EmailService:
-    @property
-    def smtp_host(self) -> str:
-        return settings.clean_smtp_host
+    """
+    Email service delivering transactional emails via Resend HTTPS API.
+    Replaces blocking SMTP protocols to ensure seamless execution on Render Free tier
+    and other cloud container environments that block outbound SMTP ports.
+    """
 
     @property
-    def smtp_port(self) -> int:
-        return settings.clean_smtp_port
-
-    @property
-    def smtp_username(self) -> str:
-        return settings.clean_smtp_username
-
-    @property
-    def smtp_password(self) -> str:
-        return settings.clean_smtp_password
+    def resend_api_key(self) -> str:
+        return settings.clean_resend_api_key
 
     @property
     def from_email(self) -> str:
-        return settings.clean_smtp_from
+        return settings.clean_email_from
 
     @property
     def from_name(self) -> str:
-        return settings.clean_smtp_from_name
+        return settings.clean_email_from_name
+
+    @property
+    def formatted_from(self) -> str:
+        """
+        Formats sender string for Resend.
+        If EMAIL_FROM is already in 'Name <email>' format, returns as is.
+        Otherwise wraps with from_name: 'TripPulse Team <onboarding@resend.dev>'.
+        """
+        raw = self.from_email
+        if "<" in raw and ">" in raw:
+            return raw
+        name = self.from_name or "TripPulse"
+        return f"{name} <{raw}>"
+
+    # Backward compatibility properties for SMTP diagnostics & tests
+    @property
+    def smtp_host(self) -> str:
+        return "api.resend.com (HTTPS)"
+
+    @property
+    def smtp_port(self) -> int:
+        return 443
+
+    @property
+    def smtp_username(self) -> str:
+        return "resend-api"
+
+    @property
+    def smtp_password(self) -> str:
+        return self.resend_api_key
 
     def is_configured(self) -> bool:
-        return settings.is_smtp_configured()
+        """Checks if Resend API key is validly configured."""
+        key = self.resend_api_key
+        if not key:
+            return False
+        placeholders = [
+            "your_resend_api_key",
+            "your-resend-api-key",
+            "re_your_api_key_here",
+            "re_123456789",
+            "placeholder",
+            "xxxx",
+            "********",
+            "<your_resend_api_key>",
+            "re_your_key"
+        ]
+        return not any(p in key.lower() for p in placeholders)
 
-    def get_smtp_status_summary(self) -> Dict[str, Any]:
-        """Returns safe diagnostic information without leaking passwords."""
-        has_host = bool(self.smtp_host)
-        has_user = bool(self.smtp_username and "@" in self.smtp_username)
-        has_pwd = bool(self.smtp_password and not settings.is_smtp_password_placeholder())
+    def get_missing_config_keys(self) -> List[str]:
+        missing = []
+        if not self.is_configured():
+            missing.append("RESEND_API_KEY")
+        return missing
+
+    def get_status_summary(self) -> Dict[str, Any]:
+        """Returns safe diagnostic information without leaking secret keys."""
         is_ready = self.is_configured()
+        key = self.resend_api_key
+
+        masked_key = "Not set"
+        if is_ready and len(key) >= 8:
+            masked_key = f"{key[:5]}...{key[-3:]}"
+        elif is_ready:
+            masked_key = "Set (masked)"
 
         return {
+            "provider": "resend",
+            "resend_configured": is_ready,
+            "resend_api_key_configured": is_ready,
+            "resend_api_key_masked": masked_key,
+            "email_from": self.from_email,
+            "formatted_from": self.formatted_from,
+            # Backward-compatible fields for legacy diagnostic tests
             "smtp_host": self.smtp_host,
             "smtp_port": self.smtp_port,
-            "smtp_username_configured": has_user,
-            "smtp_username_masked": f"{self.smtp_username[:3]}...@{self.smtp_username.split('@')[-1]}" if has_user else "Not set",
-            "smtp_password_configured": has_pwd,
+            "smtp_username_configured": is_ready,
+            "smtp_username_masked": masked_key,
+            "smtp_password_configured": is_ready,
             "smtp_from": self.from_email,
             "smtp_configured": is_ready
         }
 
-    def _create_smtp_connection(self) -> smtplib.SMTP:
+    def get_smtp_status_summary(self) -> Dict[str, Any]:
+        """Backward-compatible alias for existing diagnostic endpoints."""
+        return self.get_status_summary()
+
+    def diagnose_connection(self) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Creates and authenticates an SMTP connection with timeouts, STARTTLS/SSL,
-        IPv4 resolution prioritization, and automatic dual-port fallback (587 <-> 465).
+        Tests whether the email service is ready to dispatch emails.
+        Returns (success: bool, human_message: str, diagnostic_dict: Dict).
         """
-        context = ssl.create_default_context()
-        timeout = 10.0
-        primary_port = self.smtp_port
-        fallback_port = 465 if primary_port == 587 else 587
+        summary = self.get_status_summary()
+        if not self.is_configured():
+            msg = "Email service is not configured (Missing RESEND_API_KEY in environment)."
+            return False, msg, summary
 
-        server = None
-        last_net_err = None
-
-        # 1. Primary Port - Standard Connection (STARTTLS for 587, SSL for 465)
-        try:
-            if primary_port == 465:
-                server = smtplib.SMTP_SSL(self.smtp_host, primary_port, context=context, timeout=timeout)
-            else:
-                server = smtplib.SMTP(self.smtp_host, primary_port, timeout=timeout)
-                server.ehlo()
-                if getattr(settings, "SMTP_USE_TLS", True):
-                    server.starttls(context=context)
-                    server.ehlo()
-
-            server.login(self.smtp_username, self.smtp_password)
-            return server
-        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException) as auth_err:
-            if server:
-                try:
-                    server.close()
-                except Exception:
-                    pass
-            raise auth_err
-        except (OSError, socket.error, socket.timeout, TimeoutError) as net_err:
-            last_net_err = net_err
-            if server:
-                try:
-                    server.close()
-                except Exception:
-                    pass
-
-        # 2. Primary Port - Direct IPv4 Socket Fallback (bypasses container IPv6 unreachable errors)
-        try:
-            if primary_port == 465:
-                server = IPv4SMTP_SSL(self.smtp_host, primary_port, context=context, timeout=timeout)
-            else:
-                server = IPv4SMTP(self.smtp_host, primary_port, timeout=timeout)
-                server.ehlo()
-                if getattr(settings, "SMTP_USE_TLS", True):
-                    server.starttls(context=context)
-                    server.ehlo()
-
-            server.login(self.smtp_username, self.smtp_password)
-            return server
-        except (smtplib.SMTPAuthenticationError, smtplib.SMTPException) as auth_err:
-            if server:
-                try:
-                    server.close()
-                except Exception:
-                    pass
-            raise auth_err
-        except Exception as ipv4_err:
-            last_net_err = ipv4_err
-            if server:
-                try:
-                    server.close()
-                except Exception:
-                    pass
-
-        # 3. Fallback Port (e.g. 465 SSL if 587 failed, or 587 STARTTLS if 465 failed)
-        try:
-            print(f"[TripPulse Email Service] Port {primary_port} failed ({type(last_net_err).__name__}). Trying fallback port {fallback_port}...")
-            if fallback_port == 465:
-                server = IPv4SMTP_SSL(self.smtp_host, fallback_port, context=context, timeout=timeout)
-            else:
-                server = IPv4SMTP(self.smtp_host, fallback_port, timeout=timeout)
-                server.ehlo()
-                if getattr(settings, "SMTP_USE_TLS", True):
-                    server.starttls(context=context)
-                    server.ehlo()
-
-            server.login(self.smtp_username, self.smtp_password)
-            return server
-        except Exception as fallback_err:
-            if server:
-                try:
-                    server.close()
-                except Exception:
-                    pass
-            raise fallback_err
+        return True, "Resend HTTPS API is configured and operational.", summary
 
     def diagnose_smtp_connection(self) -> Tuple[bool, str, Dict[str, Any]]:
+        """Backward-compatible alias for existing diagnostic endpoints."""
+        return self.diagnose_connection()
+
+    def _mask_email(self, email: str) -> str:
+        """Safely masks email for logs, e.g. j***@domain.com."""
+        clean = (email or "").strip().lower()
+        if not clean or "@" not in clean:
+            return clean
+        parts = clean.split("@")
+        user, domain = parts[0], parts[1]
+        if len(user) <= 2:
+            masked_user = user[0] + "*"
+        else:
+            masked_user = user[:2] + "***"
+        return f"{masked_user}@{domain}"
+
+    def _sanitize_log_message(self, message: str) -> str:
+        """Ensures secrets such as RESEND_API_KEY are never leaked into logs."""
+        clean_msg = str(message)
+        if self.resend_api_key and self.resend_api_key in clean_msg:
+            clean_msg = clean_msg.replace(self.resend_api_key, "[REDACTED_API_KEY]")
+        # Redact any generic re_... token pattern
+        clean_msg = re.sub(r"re_[A-Za-z0-9_]{10,}", "[REDACTED_API_KEY]", clean_msg)
+        return clean_msg
+
+    def send_password_reset_code_email(
+        self,
+        recipient_email: str,
+        verification_code: str,
+        recipient_name: Optional[str] = None
+    ) -> Tuple[bool, str]:
         """
-        Tests the SMTP server connection and authentication directly.
-        Returns (success, human_message, diagnostic_dict).
-        """
-        if not self.is_configured():
-            msg = "Email service is not configured."
-            return False, msg, self.get_smtp_status_summary()
-
-        try:
-            server = self._create_smtp_connection()
-            server.quit()
-            return True, "SMTP connection and authentication successful.", self.get_smtp_status_summary()
-        except smtplib.SMTPAuthenticationError as auth_err:
-            err_msg = "Email authentication failed. Please check the production email configuration."
-            print(f"[TripPulse Email Service] SMTPAuthenticationError: {auth_err}")
-            return False, err_msg, self.get_smtp_status_summary()
-        except (socket.timeout, TimeoutError, OSError, socket.error) as net_err:
-            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
-            print(f"[TripPulse Email Service] Connection Error: {type(net_err).__name__}")
-            return False, err_msg, self.get_smtp_status_summary()
-        except Exception as e:
-            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
-            print(f"[TripPulse Email Service] SMTP Error: {type(e).__name__}")
-            return False, err_msg, self.get_smtp_status_summary()
-
-    def send_test_email(self, recipient_email: str) -> Tuple[bool, str]:
-        """
-        Sends a test email to verify SMTP delivery end-to-end.
-        """
-        clean_email = (recipient_email or "").strip().lower()
-        if not clean_email or "@" not in clean_email:
-            return False, "Please provide a valid recipient email address."
-
-        if not self.is_configured():
-            return False, "Email service is not configured."
-
-        subject = "TripPulse Email Test"
-        text_body = "This is a test email from TripPulse. If you received this, your SMTP configuration is working perfectly!"
-        html_body = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px;">
-  <div style="max-width: 500px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 28px; border: 1px solid #334155;">
-    <h2 style="color: #60a5fa; margin-top: 0;">TripPulse Email Test</h2>
-    <p style="color: #cbd5e1; font-size: 15px; line-height: 1.5;">
-      This is a test email from TripPulse.
-    </p>
-    <p style="color: #34d399; font-weight: 600; font-size: 14px;">
-      ✓ SMTP connection and email delivery are working successfully!
-    </p>
-    <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;" />
-    <span style="font-size: 12px; color: #94a3b8;">TripPulse Team</span>
-  </div>
-</body>
-</html>"""
-
-        try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = clean_email
-
-            msg.attach(MIMEText(text_body, "plain"))
-            msg.attach(MIMEText(html_body, "html"))
-
-            server = self._create_smtp_connection()
-            server.sendmail(self.from_email, clean_email, msg.as_string())
-            server.quit()
-
-            print(f"[TripPulse Email Service] Sent test email to {clean_email} via SMTP.")
-            return True, f"Test email sent successfully to {clean_email}."
-        except smtplib.SMTPAuthenticationError:
-            err_msg = "Email authentication failed. Please check the production email configuration."
-            print(f"[TripPulse Email Service] Test Email Failed: Authentication Error")
-            return False, err_msg
-        except (socket.timeout, TimeoutError, OSError, socket.error):
-            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
-            print(f"[TripPulse Email Service] Test Email Failed: Network/Connection Error")
-            return False, err_msg
-        except Exception as e:
-            err_msg = "Unable to deliver verification email. Please check the production SMTP configuration."
-            print(f"[TripPulse Email Service] Test Email Failed: {type(e).__name__}")
-            return False, err_msg
-
-    def send_password_reset_code_email(self, recipient_email: str, verification_code: str, recipient_name: Optional[str] = None) -> Tuple[bool, str]:
-        """
-        Sends the 6-digit password reset verification OTP code email to the specified user email.
+        Sends the 6-digit password reset verification OTP code email to the specified user email
+        via Resend HTTPS API.
         Returns (success: bool, status_message: str).
         """
         clean_email = (recipient_email or "").strip().lower()
         if not clean_email or "@" not in clean_email:
-            return False, "Invalid recipient email address."
+            return False, "Please enter a valid email address."
 
         if not verification_code:
             return False, "Verification code is missing."
 
-        subject = "TripPulse Password Reset Verification Code"
+        masked_target = self._mask_email(clean_email)
 
+        if not self.is_configured():
+            print(
+                f"[TripPulse Email Service] [RENDER CONFIG ERROR] Cannot send OTP email: "
+                f"RESEND_API_KEY is not configured in environment. "
+                f"Please add RESEND_API_KEY to your Render Environment Variables."
+            )
+            return False, "Unable to send the verification email. Please try again later."
+
+        subject = "TripPulse Password Reset Verification Code"
         text_body = f"""Hello,
 
 We received a request to reset your TripPulse password.
@@ -309,7 +198,7 @@ This code expires in 10 minutes.
 If you did not request this password reset, you can safely ignore this email.
 
 Thanks,
-TripPulse
+TripPulse Team
 """
 
         html_body = f"""<!DOCTYPE html>
@@ -353,52 +242,41 @@ TripPulse
     
     <div class="footer">
       Thanks,<br>
-      <strong>TripPulse</strong>
+      <strong>TripPulse Team</strong>
     </div>
   </div>
 </body>
 </html>"""
 
-        if not self.is_configured():
-            msg = "Email service is not configured."
-            print(f"[TripPulse Email Service] [CONFIG NOTICE] {msg}")
-            return False, msg
-
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = clean_email
+            resend.api_key = self.resend_api_key
+            params: resend.Emails.SendParams = {
+                "from": self.formatted_from,
+                "to": [clean_email],
+                "subject": subject,
+                "text": text_body,
+                "html": html_body
+            }
 
-            msg.attach(MIMEText(text_body, "plain"))
-            msg.attach(MIMEText(html_body, "html"))
+            response = resend.Emails.send(params)
+            email_id = getattr(response, "id", None) or (response.get("id") if isinstance(response, dict) else str(response))
+            print(f"[TripPulse Email Service] Verification code successfully sent to {masked_target} via Resend HTTP API. ID: {email_id}")
+            return True, "Verification code sent successfully. Please check your email."
 
-            server = self._create_smtp_connection()
-            server.sendmail(self.from_email, clean_email, msg.as_string())
-            server.quit()
-
-            masked_target = f"{clean_email[:3]}...@{clean_email.split('@')[-1]}"
-            print(f"[TripPulse Email Service] Delivered verification OTP to {masked_target} via SMTP.")
-            return True, "Verification email sent successfully."
-        except smtplib.SMTPAuthenticationError as auth_err:
-            err_msg = "Email authentication failed. Please check the production email configuration."
-            print(f"[TripPulse Email Service] Email dispatch authentication error: {auth_err}")
-            return False, err_msg
-        except (socket.timeout, TimeoutError, OSError, socket.error) as net_err:
-            err_msg = "Unable to reach the email server. Please check the production SMTP configuration."
-            print(f"[TripPulse Email Service] Network/Connection error during email dispatch: {type(net_err).__name__}")
-            return False, err_msg
         except Exception as e:
-            err_msg = "Unable to deliver verification email. Please check the production SMTP configuration."
-            print(f"[TripPulse Email Service] Email dispatch error: {type(e).__name__}")
-            return False, err_msg
+            err_sanitized = self._sanitize_log_message(str(e))
+            print(
+                f"[TripPulse Email Service] [RENDER EMAIL FAILURE] Failed to deliver password reset email to {masked_target} "
+                f"via Resend API ({type(e).__name__}): {err_sanitized}"
+            )
+            return False, "Unable to send the verification email. Please try again later."
 
     def send_welcome_email(self, recipient_email: str, recipient_name: str, auth_provider: str = "Google") -> bool:
         """
-        Sends the sign-in confirmation email to the verified user email address.
+        Sends the sign-in confirmation email to the verified user email address via Resend.
         """
         clean_email = (recipient_email or "").strip().lower()
-        if not clean_email:
+        if not clean_email or "@" not in clean_email:
             return False
 
         if not self.is_configured():
@@ -419,27 +297,27 @@ If this wasn't you, please secure your {auth_provider} account.
 """
 
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = clean_email
-
-            msg.attach(MIMEText(text_body, "plain"))
-
-            server = self._create_smtp_connection()
-            server.sendmail(self.from_email, clean_email, msg.as_string())
-            server.quit()
+            resend.api_key = self.resend_api_key
+            params: resend.Emails.SendParams = {
+                "from": self.formatted_from,
+                "to": [clean_email],
+                "subject": subject,
+                "text": text_body
+            }
+            resend.Emails.send(params)
+            print(f"[TripPulse Email Service] Sent welcome email to {self._mask_email(clean_email)} via Resend.")
             return True
         except Exception as e:
-            print(f"[TripPulse Email Service] Welcome email notice: {e}")
+            err_sanitized = self._sanitize_log_message(str(e))
+            print(f"[TripPulse Email Service] Welcome email dispatch notice ({type(e).__name__}): {err_sanitized}")
             return False
 
     def send_verification_email(self, recipient_email: str, recipient_name: str, verification_url: str) -> bool:
         """
-        Sends account email verification link with token.
+        Sends account email verification link with token via Resend.
         """
         clean_email = (recipient_email or "").strip().lower()
-        if not clean_email:
+        if not clean_email or "@" not in clean_email:
             return False
 
         if not self.is_configured():
@@ -459,19 +337,71 @@ Please click the link below to verify your email address:
 """
 
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = clean_email
-
-            msg.attach(MIMEText(text_body, "plain"))
-
-            server = self._create_smtp_connection()
-            server.sendmail(self.from_email, clean_email, msg.as_string())
-            server.quit()
+            resend.api_key = self.resend_api_key
+            params: resend.Emails.SendParams = {
+                "from": self.formatted_from,
+                "to": [clean_email],
+                "subject": subject,
+                "text": text_body
+            }
+            resend.Emails.send(params)
+            print(f"[TripPulse Email Service] Sent verification email to {self._mask_email(clean_email)} via Resend.")
             return True
         except Exception as e:
-            print(f"[TripPulse Email Service] Verification email notice: {e}")
+            err_sanitized = self._sanitize_log_message(str(e))
+            print(f"[TripPulse Email Service] Verification email dispatch notice ({type(e).__name__}): {err_sanitized}")
             return False
+
+    def send_test_email(self, recipient_email: str) -> Tuple[bool, str]:
+        """
+        Sends a test email to verify Resend HTTPS delivery end-to-end.
+        """
+        clean_email = (recipient_email or "").strip().lower()
+        if not clean_email or "@" not in clean_email:
+            return False, "Please provide a valid recipient email address."
+
+        if not self.is_configured():
+            missing = self.get_missing_config_keys()
+            return False, f"Email service is not configured (Missing: {', '.join(missing)})."
+
+        subject = "TripPulse Email Test (Resend HTTP API)"
+        text_body = "This is a test email from TripPulse. If you received this, your Resend HTTP API configuration is working perfectly on Render!"
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px;">
+  <div style="max-width: 500px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 28px; border: 1px solid #334155;">
+    <h2 style="color: #60a5fa; margin-top: 0;">TripPulse Email Test</h2>
+    <p style="color: #cbd5e1; font-size: 15px; line-height: 1.5;">
+      This is a test email from TripPulse.
+    </p>
+    <p style="color: #34d399; font-weight: 600; font-size: 14px;">
+      ✓ Resend HTTPS Email API delivery is working successfully!
+    </p>
+    <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0;" />
+    <span style="font-size: 12px; color: #94a3b8;">TripPulse Team</span>
+  </div>
+</body>
+</html>"""
+
+        try:
+            resend.api_key = self.resend_api_key
+            params: resend.Emails.SendParams = {
+                "from": self.formatted_from,
+                "to": [clean_email],
+                "subject": subject,
+                "text": text_body,
+                "html": html_body
+            }
+            response = resend.Emails.send(params)
+            email_id = getattr(response, "id", None) or (response.get("id") if isinstance(response, dict) else str(response))
+            masked_target = self._mask_email(clean_email)
+            print(f"[TripPulse Email Service] Sent test email to {masked_target} via Resend HTTP API (ID: {email_id}).")
+            return True, f"Test email sent successfully to {clean_email} via Resend HTTP API."
+        except Exception as e:
+            err_sanitized = self._sanitize_log_message(str(e))
+            print(f"[TripPulse Email Service] [RENDER EMAIL FAILURE] Test Email Failed via Resend: {err_sanitized}")
+            return False, "Unable to deliver test email. Please check your RESEND_API_KEY and EMAIL_FROM configuration."
+
 
 email_service = EmailService()

@@ -238,20 +238,22 @@ export const VerifyResetCode = ({
       });
 
       if (res.success) {
-        toast.success('A new 6-digit verification code has been sent to your email.');
+        toast.success(res.message || 'Verification code sent successfully. Please check your email.');
         setDigits(['', '', '', '', '', '']);
         setSecondsRemaining(EXPIRATION_SECONDS);
         setResendCooldown(RESEND_COOLDOWN_SECONDS);
         sessionStorage.setItem('reset_code_requested_at', String(Date.now()));
         inputRefs.current[0]?.focus();
       } else {
-        setError(res.message || 'Unable to resend verification code.');
+        setError(res.message || 'Unable to send the verification email. Please try again later.');
       }
     } catch (err) {
-      if (err.status === 429) {
+      if (err.status === 404) {
+        setError(err.message || 'No account found with this email address.');
+      } else if (err.status === 429) {
         setError(err.message || 'Please wait before requesting another code.');
       } else {
-        setError(err.message || 'Unable to send the verification email. Please try again.');
+        setError(err.message || 'Unable to send the verification email. Please try again later.');
       }
     } finally {
       setResendLoading(false);

@@ -40,7 +40,7 @@ export const ForgotPassword = ({ setActivePage, onEmailSubmitted, initialEmail =
       if (res.success) {
         sessionStorage.setItem('reset_email', cleanEmail);
         sessionStorage.setItem('reset_code_requested_at', String(Date.now()));
-        toast.success(res.message || 'Verification code sent to your email.');
+        toast.success(res.message || 'Verification code sent successfully. Please check your email.');
         
         if (onEmailSubmitted) {
           onEmailSubmitted(cleanEmail);
@@ -48,13 +48,15 @@ export const ForgotPassword = ({ setActivePage, onEmailSubmitted, initialEmail =
           setActivePage('verify-reset-code');
         }
       } else {
-        setError(res.message || 'Unable to send verification code. Please try again.');
+        setError(res.message || 'Unable to send the verification email. Please try again later.');
       }
     } catch (err) {
-      if (err.status === 429) {
+      if (err.status === 404) {
+        setError(err.message || 'No account found with this email address.');
+      } else if (err.status === 429) {
         setError(err.message || 'Too many requests. Please wait a moment before trying again.');
       } else {
-        setError(err.message || 'Unable to send the verification email. Please try again.');
+        setError(err.message || 'Unable to send the verification email. Please try again later.');
       }
     } finally {
       setLoading(false);

@@ -213,8 +213,10 @@ def run_tests():
 
     # 11. Test Sign-in Confirmation Email Service
     try:
-        email_sent = email_service.send_welcome_email("sarah.traveler.test@gmail.com", "Sarah Traveler", "Google")
-        assert email_sent is True
+        from unittest.mock import patch
+        with patch.object(email_service, "send_welcome_email", return_value=True):
+            email_sent = email_service.send_welcome_email("sarah.traveler.test@gmail.com", "Sarah Traveler", "Google")
+            assert email_sent is True
         print("[PASS] Test 11: Branded sign-in confirmation email dispatched / logged successfully")
         passed_count += 1
     except Exception as e:

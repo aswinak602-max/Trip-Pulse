@@ -70,15 +70,24 @@ def run_tests():
         print(f"  [PASS] SMTP Status Diagnostic checked: host={diag_data['data']['smtp_host']}, configured={diag_data['data']['smtp_configured']}")
 
         # ---------------------------------------------------------------------
+        # TEST 0: Non-existent Account verification check (404)
+        # ---------------------------------------------------------------------
+        print("\n[TEST 0] Non-existent Account check -> 404 response")
+        res0 = client.post("/api/v1/auth/forgot-password", json={"email": "non_existent_account_999@example.com"})
+        assert res0.status_code == 404
+        assert "No account found with this email address." in res0.json()["message"]
+        print("  [PASS] Non-existent email properly returns HTTP 404 'No account found with this email address.'")
+
+        # ---------------------------------------------------------------------
         # TEST 1: Request Password Reset Code (with mock SMTP delivery)
         # ---------------------------------------------------------------------
         print("\n[TEST 1] Forgot Password -> Send Verification Code")
-        with patch.object(email_service, "send_password_reset_code_email", return_value=(True, "Verification email sent successfully.")):
+        with patch.object(email_service, "send_password_reset_code_email", return_value=(True, "Verification code sent successfully. Please check your email.")):
             res1 = client.post("/api/v1/auth/forgot-password", json={"email": test_email})
             assert res1.status_code == 200, f"Expected 200, got {res1.status_code}: {res1.text}"
             data1 = res1.json()
             assert data1["success"] is True
-            assert data1["message"] == "If an account exists for this email, a verification code has been sent."
+            assert data1["message"] == "Verification code sent successfully. Please check your email."
             # Verify plaintext verification code is not exposed in data payload
             assert "code" not in data1.get("data", {}), "Plaintext 'code' field exposed in API response data!"
             assert "verification_code" not in data1.get("data", {}), "'verification_code' exposed in API response data!"
@@ -345,7 +354,7 @@ def run_tests():
         # EXTRA ERROR TESTS: SMTP Failure simulation
         # ---------------------------------------------------------------------
         print("\n[EXTRA TEST] Verify SMTP Authentication Failure Handling")
-        with patch.object(email_service, "send_password_reset_code_email", return_value=(False, "Email authentication failed. Please check the production email configuration.")):
+        with patch.object(email_service, "send_password_reset_code_email", return_value=(False, "Unable to send the verification email right now. Please try again.")):
             # Age previous records
             db.query(PasswordResetCode).filter(PasswordResetCode.email == test_email).update({
                 "created_at": datetime.utcnow() - timedelta(seconds=70)
@@ -354,8 +363,8 @@ def run_tests():
 
             res_smtp_err = client.post("/api/v1/auth/forgot-password", json={"email": test_email})
             assert res_smtp_err.status_code == 500
-            assert "Email authentication failed" in res_smtp_err.json()["message"]
-            print("  [PASS] SMTP Authentication failure correctly produces user-friendly error without false success.")
+            assert "Unable to send the verification email right now" in res_smtp_err.json()["message"]
+            print("  [PASS] SMTP failure correctly produces user-friendly error without false success.")
 
         # ---------------------------------------------------------------------
         # Summary

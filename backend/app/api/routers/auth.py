@@ -64,7 +64,7 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     
     # Generate verification token
     verification_token = secrets.token_urlsafe(32)
-    is_verified = not email_service.is_configured()  # Auto-verified in local dev if no SMTP server
+    is_verified = not email_service.is_configured()  # Auto-verified in local dev if no email service configured
     
     # Create new user
     new_user = User(
@@ -160,9 +160,9 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
-    Receives email, applies rate limiting, generates a cryptographically secure 6-digit code,
-    stores its salted SHA-256 hash with 10-minute expiry and attempt limit,
-    and sends the code via email without exposing it in the API response.
+    Receives email, verifies account existence, applies rate limiting,
+    generates a cryptographically secure 6-digit code, stores its salted SHA-256 hash
+    with 10-minute expiry and attempt limit, and sends the code via email without exposing it.
     """
     clean_email = req.email.lower().strip()
     if not clean_email or "@" not in clean_email:
@@ -171,7 +171,15 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
-    # Rate limiting: Enforce cooldown between code generation requests for the same email
+    # 1. Verify that the account exists
+    user = db.query(User).filter(User.email == clean_email).first()
+    if not user:
+        return error_response(
+            message="No account found with this email address.",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+
+    # 2. Rate limiting: Enforce cooldown between code generation requests for the same email
     cooldown_seconds = getattr(settings, "PASSWORD_RESET_COOLDOWN_SECONDS", 60)
     recent_request = db.query(PasswordResetCode).filter(
         PasswordResetCode.email == clean_email
@@ -186,7 +194,7 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-    # Invalidate / cancel previous active reset codes for this email
+    # 3. Invalidate / cancel previous active reset codes for this email
     existing_active = db.query(PasswordResetCode).filter(
         PasswordResetCode.email == clean_email,
         PasswordResetCode.is_used == False
@@ -195,18 +203,15 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
         item.is_used = True
     db.commit()
 
-    # Generate cryptographically secure 6-digit verification code
+    # 4. Generate cryptographically secure 6-digit verification code
     code = f"{secrets.randbelow(1000000):06d}"
     code_hash = hash_verification_code(clean_email, code)
     expire_minutes = getattr(settings, "PASSWORD_RESET_CODE_EXPIRE_MINUTES", 10)
     expires_at = datetime.utcnow() + timedelta(minutes=expire_minutes)
 
-    # Find user if exists (to link user_id and get user name for email greeting)
-    user = db.query(User).filter(User.email == clean_email).first()
-
-    # Store reset request record with code HASH (never plaintext code)
+    # 5. Store reset request record with code HASH (never plaintext code)
     reset_record = PasswordResetCode(
-        user_id=user.id if user else None,
+        user_id=user.id,
         email=clean_email,
         code_hash=code_hash,
         expires_at=expires_at,
@@ -217,42 +222,42 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
     db.add(reset_record)
     db.commit()
 
-    # Send verification code email via EmailService
+    # 6. Send verification code email via EmailService (Resend HTTPS API)
     email_sent = False
-    err_detail = "Unable to send the verification email. Please try again."
+    err_detail = "Unable to send the verification email. Please try again later."
     try:
         email_sent, err_detail = email_service.send_password_reset_code_email(
             recipient_email=clean_email,
             verification_code=code,
-            recipient_name=user.name if user else None
+            recipient_name=user.name
         )
     except Exception as e:
-        err_detail = "Unable to send verification email. Please check server email configuration."
-        print(f"[TripPulse Auth] Email dispatch exception: {type(e).__name__}: {e}")
+        err_detail = "Unable to send the verification email. Please try again later."
+        print(f"[TripPulse Auth] [RENDER ERROR] Email dispatch exception: {type(e).__name__}: {e}")
 
     if not email_sent:
-        # Invalidate the record so the user isn't blocked by cooldown on retry
+        # Invalidate the record so user is not blocked by cooldown on immediate retry
         reset_record.is_used = True
         db.commit()
         return error_response(
-            message=err_detail,
+            message=err_detail or "Unable to send the verification email. Please try again later.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-    # Generic safe response preventing email enumeration and never exposing the code
+    # 7. Safe response never exposing the code
     return success_response(
         data={
             "email": clean_email,
             "expires_in_minutes": expire_minutes,
             "cooldown_seconds": cooldown_seconds
         },
-        message="If an account exists for this email, a verification code has been sent."
+        message="Verification code sent successfully. Please check your email."
     )
 
 @router.post("/test-email")
 def test_email_endpoint(req: ForgotPasswordRequest):
     """
-    Development test endpoint to verify SMTP delivery independently of OTP logic.
+    Test endpoint to verify Resend HTTPS delivery independently of OTP logic.
     """
     clean_email = req.email.lower().strip()
     success, msg = email_service.send_test_email(clean_email)
@@ -260,26 +265,28 @@ def test_email_endpoint(req: ForgotPasswordRequest):
         return error_response(
             message=msg,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            data=email_service.get_smtp_status_summary()
+            data=email_service.get_status_summary()
         )
     return success_response(
-        data=email_service.get_smtp_status_summary(),
+        data=email_service.get_status_summary(),
         message=msg
     )
 
+@router.get("/email-status")
 @router.get("/smtp-status")
-def get_smtp_status_endpoint():
+def get_email_status_endpoint():
     """
-    Diagnostic endpoint that returns safe SMTP configuration details and connection health.
+    Diagnostic endpoint that returns safe email service configuration details and health.
+    Supports both /email-status and legacy /smtp-status.
     """
-    connected, msg, summary = email_service.diagnose_smtp_connection()
+    connected, msg, summary = email_service.diagnose_connection()
     return success_response(
         data={
             "connected": connected,
             "message": msg,
             **summary
         },
-        message="SMTP status diagnostic"
+        message="Email service status diagnostic"
     )
 
 @router.post("/verify-reset-code")

@@ -93,16 +93,19 @@ class Settings(BaseSettings):
     FACEBOOK_APP_ID: str = ""
     FACEBOOK_APP_SECRET: str = ""
 
-    # SMTP / Email Settings
+    # Resend Email Settings (HTTP API - Render Free Plan Compatible)
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "onboarding@resend.dev"
+    EMAILS_FROM_EMAIL: str = "notifications@trippulse.app"
+    EMAILS_FROM_NAME: str = "TripPulse Team"
+
+    # Legacy SMTP Settings (optional local fallback)
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
-    EMAIL_FROM: str = ""
-    EMAILS_FROM_EMAIL: str = "notifications@trippulse.app"
-    EMAILS_FROM_NAME: str = "TripPulse Team"
     SMTP_USE_TLS: bool = True
     
     # Password Reset Security Settings
@@ -135,6 +138,49 @@ class Settings(BaseSettings):
         return raw.strip().strip('"\'')
 
     @property
+    def clean_resend_api_key(self) -> str:
+        raw = self.RESEND_API_KEY or os.environ.get("RESEND_API_KEY", "")
+        return raw.strip().strip('"\'')
+
+    @property
+    def clean_email_from(self) -> str:
+        raw = self.EMAIL_FROM or os.environ.get("EMAIL_FROM", "") or self.SMTP_FROM or "onboarding@resend.dev"
+        return raw.strip().strip('"\'')
+
+    @property
+    def clean_email_from_name(self) -> str:
+        raw = self.EMAILS_FROM_NAME or "TripPulse Team"
+        return raw.strip().strip('"\'')
+
+    def is_resend_api_key_placeholder(self) -> bool:
+        key = self.clean_resend_api_key.lower()
+        if not key:
+            return True
+        placeholders = [
+            "your_resend_api_key",
+            "your-resend-api-key",
+            "re_your_api_key_here",
+            "re_123456789",
+            "placeholder",
+            "xxxx",
+            "********",
+            "<your_resend_api_key>",
+            "re_your_key"
+        ]
+        return any(p in key for p in placeholders)
+
+    def is_resend_configured(self) -> bool:
+        key = self.clean_resend_api_key
+        if not key:
+            return False
+        if not key.startswith("re_") and len(key) < 10:
+            return False
+        return not self.is_resend_api_key_placeholder()
+
+    def is_email_configured(self) -> bool:
+        return self.is_resend_configured()
+
+    @property
     def clean_smtp_host(self) -> str:
         raw = self.SMTP_HOST or "smtp.gmail.com"
         return raw.strip().strip('"\'')
@@ -156,9 +202,11 @@ class Settings(BaseSettings):
         raw = self.SMTP_PASSWORD or ""
         clean = raw.strip().strip('"\'')
         # Google App Passwords are 16 characters often presented as 4 groups of 4 with spaces (e.g. "abcd efgh ijkl mnop")
-        # If it's a 16-char code with spaces (19 chars total), strip the internal spaces
+        no_spaces = clean.replace(" ", "")
+        if len(no_spaces) == 16:
+            return no_spaces
         if len(clean) == 19 and clean.count(" ") == 3:
-            clean = clean.replace(" ", "")
+            return no_spaces
         return clean
 
     @property
@@ -185,7 +233,8 @@ class Settings(BaseSettings):
             "xxxx",
             "********",
             "app_password",
-            "<your_app_password>"
+            "<your_app_password>",
+            "your-16-char-gmail-app-password"
         ]
         return any(p in pwd for p in placeholders)
 
@@ -244,13 +293,12 @@ class Settings(BaseSettings):
             not self.is_google_client_secret_masked()
         )
 
-
     class Config:
         case_sensitive = True
         extra = "allow"
         env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
 
-# Ensure .env is explicitly loaded into environment
+# Ensure .env is explicitly loaded into environment for local execution
 try:
     from dotenv import load_dotenv
     _env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
@@ -260,5 +308,6 @@ except Exception:
     pass
 
 settings = Settings()
+
 
 
